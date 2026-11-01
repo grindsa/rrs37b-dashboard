@@ -1,15 +1,20 @@
-# Example Caddy site for https://rrs37b.mewes-im-netz.de
-# Use when Caddy runs in Docker on the same host and is attached to network `rss37`.
-# Caddy obtains and renews TLS automatically when DNS points here.
-#
-# Prerequisites:
-# - App container `rrs37-dashboard` on network `rss37` (see docker-compose.yml)
-# - This Caddy container also joined to `rss37`
+# Snippet for the host reverse-proxy stack (network `proxy`).
+# Copy into the proxy Caddyfile and set env overrides as needed.
 
-rrs37b.mewes-im-netz.de {
-	encode gzip
-	reverse_proxy rrs37-dashboard:3000 {
-		# Pass through streaming responses without buffering
-		flush_interval -1
+{$RRS37_HOST:rrs37b.mewes-im-netz.de} {
+	encode zstd gzip
+
+	handle {
+		# Next.js streaming — avoid buffering
+		reverse_proxy {$RRS37_UPSTREAM:rrs37-dashboard:3000} {
+			flush_interval -1
+		}
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
 	}
 }

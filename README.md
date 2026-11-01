@@ -23,7 +23,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Production deploy
 
-Build runs **on the webserver** (no image registry). The app joins Docker network `rss37` and is reached as `rrs37-dashboard:3000` from the reverse proxy on the same host (also attach that proxy to `rss37`).
+Build runs **on the webserver** (no image registry). The app joins the existing external Docker network `proxy` and is reached as `rrs37-dashboard:3000` from the reverse-proxy stack.
 
 ### One-time setup on the server
 
@@ -41,10 +41,10 @@ cp .env.example .env
 $EDITOR .env
 ```
 
-3. Put your reverse proxy on Docker network `rss37` and point it at `rrs37-dashboard:3000`:
+3. Add the Caddy/nginx snippet and proxy env vars; upstream is `rrs37-dashboard:3000` on network `proxy`:
 
-- nginx: `docs/nginx.example.conf` (uncomment TLS paths after certbot)
-- Caddy: `docs/Caddyfile.example` (auto-TLS when DNS points here)
+- Caddy: `docs/Caddyfile.example`
+- nginx: `docs/nginx.example.conf`
 
 4. Point DNS A/AAAA for `rrs37b.mewes-im-netz.de` at the server.
 

@@ -6,8 +6,8 @@ services:
     image: rrs37-dashboard:local
     container_name: rrs37-dashboard
     restart: unless-stopped
-    # No host ports — reverse proxy on the same host reaches this
-    # container via Docker network `rss37` as rrs37-dashboard:3000
+    # Reachable from the host reverse proxy as rrs37-dashboard:3000
+    # on the shared external Docker network `proxy`.
     env_file:
       - .env
     environment:
@@ -15,10 +15,10 @@ services:
       - PORT=3000
       - HOSTNAME=0.0.0.0
     networks:
-      - rss37
+      - proxy
     expose:
       - "3000"
 
 networks:
-  rss37:
-    name: rss37
+  proxy:
+    external: true
