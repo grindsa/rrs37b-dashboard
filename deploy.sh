@@ -21,6 +21,12 @@ fi
 
 BRANCH="${DEPLOY_BRANCH:-main}"
 
+# Git refuses operations when the tree is owned by another user (common for
+# /srv/stacks/*). Mark this path safe for the deploying account.
+if ! git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$ROOT"; then
+  git config --global --add safe.directory "$ROOT"
+fi
+
 echo "==> Fetching ${BRANCH} in ${ROOT}"
 git fetch origin
 git checkout "$BRANCH"

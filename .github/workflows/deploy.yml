@@ -27,4 +27,5 @@ jobs:
           script: |
             set -euo pipefail
             cd /srv/stacks/rrs37-dashboard
+            git config --global --add safe.directory /srv/stacks/rrs37-dashboard
             ./deploy.sh
