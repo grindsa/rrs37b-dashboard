@@ -15,3 +15,9 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
+    networks:
+      - rss37
+
+networks:
+  rss37:
+    name: rss37
