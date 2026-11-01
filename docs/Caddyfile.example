@@ -1,12 +1,14 @@
 # Example Caddy site for https://rrs37b.mewes-im-netz.de
+# Use when Caddy runs in Docker on the same host and is attached to network `rss37`.
 # Caddy obtains and renews TLS automatically when DNS points here.
 #
 # Prerequisites:
-# - App listening on 127.0.0.1:3000 (see docker-compose.yml)
+# - App container `rrs37-dashboard` on network `rss37` (see docker-compose.yml)
+# - This Caddy container also joined to `rss37`
 
 rrs37b.mewes-im-netz.de {
 	encode gzip
-	reverse_proxy 127.0.0.1:3000 {
+	reverse_proxy rrs37-dashboard:3000 {
 		# Pass through streaming responses without buffering
 		flush_interval -1
 	}

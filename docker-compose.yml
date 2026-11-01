@@ -6,9 +6,8 @@ services:
     image: rrs37-dashboard:local
     container_name: rrs37-dashboard
     restart: unless-stopped
-    ports:
-      # Bind to localhost; put nginx/Caddy in front for TLS + public access
-      - "127.0.0.1:3000:3000"
+    # No host ports — reverse proxy on the same host reaches this
+    # container via Docker network `rss37` as rrs37-dashboard:3000
     env_file:
       - .env
     environment:
@@ -17,6 +16,8 @@ services:
       - HOSTNAME=0.0.0.0
     networks:
       - rss37
+    expose:
+      - "3000"
 
 networks:
   rss37:
