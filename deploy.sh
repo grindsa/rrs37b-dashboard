@@ -35,14 +35,28 @@ git pull --ff-only origin "$BRANCH"
 BUILD_TIME="$(TZ=Europe/Berlin date +%Y-%m-%d-%H-%M-%S)"
 export BUILD_TIME
 echo "==> Building and starting containers (version ${BUILD_TIME})"
-docker compose build --build-arg "BUILD_TIME=${BUILD_TIME}"
-docker compose up -d
+if ! docker compose build --build-arg "BUILD_TIME=${BUILD_TIME}"; then
+  echo "ERROR: docker compose build failed" >&2
+  exit 1
+fi
+if ! docker compose up -d; then
+  echo "ERROR: docker compose up failed" >&2
+  exit 1
+fi
 
 echo "==> Status"
 docker compose ps
+
+# Refuse a "successful" deploy if the app container is not running.
+if ! docker compose ps --status running --services | grep -qx 'rrs37-dashboard'; then
+  echo "ERROR: rrs37-dashboard container is not running after deploy" >&2
+  docker compose ps >&2 || true
+  exit 1
+fi
 
 echo "==> Clearing Docker build cache"
 docker builder prune -af
 
 echo "Deploy complete."
+
 

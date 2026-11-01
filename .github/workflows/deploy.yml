@@ -17,6 +17,7 @@ jobs:
 
     steps:
       - name: Deploy via SSH
+        id: remote_deploy
         uses: appleboy/ssh-action@v1.2.2
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -24,8 +25,22 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           command_timeout: 25m
+          # Capture stdout so we can assert the remote script finished cleanly.
+          # entrypoint.sh uses pipefail, so a non-zero drone-ssh exit still fails this step.
+          capture_stdout: true
           script: |
+            #!/usr/bin/env bash
             set -euo pipefail
             cd /srv/stacks/rrs37-dashboard
             git config --global --add safe.directory /srv/stacks/rrs37-dashboard
             ./deploy.sh
+            printf '%s\n' 'RRS37_DEPLOY_OK'
+
+      # Defense in depth: if appleboy/drone-ssh ever reports success after a
+      # partial remote failure, missing this marker still fails the job.
+      - name: Assert deploy finished successfully
+        env:
+          REMOTE_STDOUT: ${{ steps.remote_deploy.outputs.stdout }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$REMOTE_STDOUT" | grep -Fq 'RRS37_DEPLOY_OK'
