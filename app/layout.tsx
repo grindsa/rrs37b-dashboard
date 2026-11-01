@@ -10,8 +10,17 @@ const geistSans = Geist({
 
 export const metadata: Metadata = {
   title: "RRS37",
+  applicationName: "RRS37",
   description:
     "Infoboard for Romain-Rolland-Straße 37B — sensors, weather, BVG",
+  appleWebApp: {
+    capable: true,
+    title: "RRS37",
+    statusBarStyle: "default",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
