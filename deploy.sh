@@ -26,8 +26,10 @@ git fetch origin
 git checkout "$BRANCH"
 git pull --ff-only origin "$BRANCH"
 
-echo "==> Building and starting containers"
-docker compose build
+BUILD_TIME="$(TZ=Europe/Berlin date +%Y-%m-%d-%H-%M-%S)"
+export BUILD_TIME
+echo "==> Building and starting containers (version ${BUILD_TIME})"
+docker compose build --build-arg "BUILD_TIME=${BUILD_TIME}"
 docker compose up -d
 
 echo "==> Status"

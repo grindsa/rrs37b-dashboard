@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        BUILD_TIME: ${BUILD_TIME:-}
     image: rrs37-dashboard:local
     container_name: rrs37-dashboard
     restart: unless-stopped

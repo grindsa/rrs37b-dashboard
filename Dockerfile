@@ -15,7 +15,12 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+# Bake build stamp into the client bundle (YYYY-MM-DD-HH-MM-SS, Europe/Berlin)
+ARG BUILD_TIME=
+RUN BT="${BUILD_TIME}" \
+  && if [ -z "$BT" ]; then BT="$(TZ=Europe/Berlin date +%Y-%m-%d-%H-%M-%S)"; fi \
+  && echo "Build version: $BT" \
+  && NEXT_PUBLIC_BUILD_TIME="$BT" npm run build
 
 FROM node:${NODE_VERSION} AS runner
 WORKDIR /app
