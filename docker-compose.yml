@@ -1,0 +1,17 @@
+services:
+  rrs37-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: rrs37-dashboard:local
+    container_name: rrs37-dashboard
+    restart: unless-stopped
+    ports:
+      # Bind to localhost; put nginx/Caddy in front for TLS + public access
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HOSTNAME=0.0.0.0

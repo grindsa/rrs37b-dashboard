@@ -1,0 +1,13 @@
+# Example Caddy site for https://rrs37b.mewes-im-netz.de
+# Caddy obtains and renews TLS automatically when DNS points here.
+#
+# Prerequisites:
+# - App listening on 127.0.0.1:3000 (see docker-compose.yml)
+
+rrs37b.mewes-im-netz.de {
+	encode gzip
+	reverse_proxy 127.0.0.1:3000 {
+		# Pass through streaming responses without buffering
+		flush_interval -1
+	}
+}
