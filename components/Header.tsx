@@ -16,8 +16,8 @@ export function Header({
         <p className="mt-2.5 text-sm text-muted">Romain-Rolland-Straße 37B</p>
       </div>
       <div className="flex shrink-0 items-center gap-1.5 pt-1 sm:gap-2">
-        <AuthLock initialStatus={initialAuth} />
         <ThemeToggle />
+        <AuthLock initialStatus={initialAuth} />
       </div>
     </header>
   );
