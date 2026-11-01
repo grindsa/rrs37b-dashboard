@@ -33,4 +33,8 @@ docker compose up -d
 echo "==> Status"
 docker compose ps
 
+echo "==> Clearing Docker build cache"
+docker builder prune -af
+
 echo "Deploy complete."
+
