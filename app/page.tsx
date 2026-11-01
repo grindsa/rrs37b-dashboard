@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Header } from "@/components/Header";
+import { DashboardTabs } from "@/components/DashboardTabs";
 import {
   SensorsPlaceholder,
   SensorsSection,
@@ -47,23 +48,27 @@ async function BvgBlock() {
 export default function Home() {
   return (
     <div className="flex flex-1 flex-col text-foreground">
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-9 px-5 py-7 sm:gap-11 sm:px-6 sm:py-10 md:max-w-3xl md:gap-12">
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-5 py-7 sm:gap-8 sm:px-6 sm:py-10 md:max-w-3xl">
         <Header />
 
-        <hr className="section-divider" />
-        <Suspense fallback={<SensorsPlaceholder />}>
-          <SensorsBlock />
-        </Suspense>
-
-        <hr className="section-divider" />
-        <Suspense fallback={<WeatherPlaceholder />}>
-          <WeatherBlock />
-        </Suspense>
-
-        <hr className="section-divider" />
-        <Suspense fallback={<BvgPlaceholder />}>
-          <BvgBlock />
-        </Suspense>
+        <DashboardTabs
+          home={
+            <div className="flex flex-col gap-8">
+              <Suspense fallback={<SensorsPlaceholder />}>
+                <SensorsBlock />
+              </Suspense>
+              <hr className="section-divider" />
+              <Suspense fallback={<WeatherPlaceholder />}>
+                <WeatherBlock />
+              </Suspense>
+            </div>
+          }
+          bvg={
+            <Suspense fallback={<BvgPlaceholder />}>
+              <BvgBlock />
+            </Suspense>
+          }
+        />
 
         <p className="pb-2 pt-2 text-center text-[0.7rem] tracking-wide text-muted">
           RRS37 · Shelly LAN · Open-Meteo · BVG
