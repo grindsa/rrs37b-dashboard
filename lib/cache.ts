@@ -24,6 +24,10 @@ export function cacheSet<T>(key: string, value: T, ttlMs: number): void {
   store.set(key, { value, expiresAt: Date.now() + ttlMs });
 }
 
+export function cacheDelete(key: string): void {
+  store.delete(key);
+}
+
 export async function cacheGetOrSet<T>(
   key: string,
   ttlMs: number,

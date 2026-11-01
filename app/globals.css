@@ -1,39 +1,110 @@
 @import "tailwindcss";
 
+/*
+  Torii Gate palette (SmithHönig / Japan-inspired):
+  mist grey #d7dbda · muted sky #a3b2b5 · vermilion #ad4b02 · charcoal brown #432910
+*/
+
 :root {
-  --background: #f4f7f6;
-  --foreground: #14201c;
-  --muted: #5a6b64;
-  --accent: #1f7a6c;
-  --accent-soft: #d7ebe6;
-  --danger: #b42318;
-  --warning: #b54708;
+  --background: #eceeed;
+  --background-accent: #d7dbda;
+  --foreground: #2a1a0c;
+  --muted: #5f6b6d;
+  --accent: #ad4b02;
+  --on-accent: #f7f2ec;
+  --accent-soft: #e8c4a0;
+  --surface: color-mix(in oklab, var(--foreground) 5.5%, transparent);
+  --hairline: color-mix(in oklab, var(--foreground) 11%, transparent);
+  --danger: #9b2f1a;
+  --warning: #9a6b2f;
+}
+
+html[data-theme="dark"] {
+  --background: #1a1008;
+  --background-accent: #432910;
+  --foreground: #e6e8e7;
+  --muted: #a3b2b5;
+  --accent: #d46a1f;
+  --on-accent: #1a1008;
+  --accent-soft: #5c3214;
+  --surface: color-mix(in oklab, var(--foreground) 8%, transparent);
+  --hairline: color-mix(in oklab, var(--foreground) 14%, transparent);
+  --danger: #e07a6a;
+  --warning: #d4a45a;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-background-accent: var(--background-accent);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
   --color-accent-soft: var(--accent-soft);
+  --color-surface: var(--surface);
+  --color-hairline: var(--hairline);
   --color-danger: var(--danger);
   --color-warning: var(--warning);
   --font-sans: var(--font-geist-sans);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0e1513;
-    --foreground: #e8efec;
-    --muted: #9aada5;
-    --accent: #3db8a4;
-    --accent-soft: #16352f;
-    --danger: #f97066;
-    --warning: #fdb022;
+body {
+  background:
+    radial-gradient(
+      120% 80% at 8% -12%,
+      color-mix(in oklab, var(--background-accent) 72%, transparent),
+      transparent 55%
+    ),
+    radial-gradient(
+      90% 55% at 100% 0%,
+      color-mix(in oklab, var(--accent) 12%, transparent),
+      transparent 48%
+    ),
+    var(--background);
+  background-attachment: fixed;
+  color: var(--foreground);
+}
+
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.section-divider {
+  border: 0;
+  border-top: 1px solid var(--hairline);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.55rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
+.animate-fade-up {
+  animation: fade-up 0.55s ease-out both;
+}
+
+.delay-1 {
+  animation-delay: 60ms;
+}
+.delay-2 {
+  animation-delay: 130ms;
+}
+.delay-3 {
+  animation-delay: 200ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up {
+    animation: none;
+  }
 }
