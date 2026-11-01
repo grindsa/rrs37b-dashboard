@@ -1,6 +1,12 @@
+import type { AuthStatus } from "@/lib/auth";
+import { AuthLock } from "./AuthLock";
 import { ThemeToggle } from "./ThemeToggle";
 
-export function Header() {
+export function Header({
+  initialAuth = "anonymous",
+}: {
+  initialAuth?: AuthStatus;
+}) {
   return (
     <header className="animate-fade-up flex items-start justify-between gap-4">
       <div className="min-w-0">
@@ -9,7 +15,10 @@ export function Header() {
         </h1>
         <p className="mt-2.5 text-sm text-muted">Romain-Rolland-Straße 37B</p>
       </div>
-      <ThemeToggle />
+      <div className="flex shrink-0 items-center gap-1.5 pt-1 sm:gap-2">
+        <AuthLock initialStatus={initialAuth} />
+        <ThemeToggle />
+      </div>
     </header>
   );
 }

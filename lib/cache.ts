@@ -45,4 +45,5 @@ export const CACHE_TTL = {
   shelly: 45_000,
   bvg: 45_000,
   weather: 12 * 60_000,
+  pv: 30_000,
 } as const;
