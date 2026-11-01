@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Deploy RRS37-Dashboard on the webserver (build on the host, no registry).
+# Deploy RRS37-Dashboard on the webserver.
 # Expected location: /srv/stacks/rrs37-dashboard
 # Usage (on the server): ./deploy.sh
 # Prerequisites: git remote configured, Docker + Compose installed, .env present.
