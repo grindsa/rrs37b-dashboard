@@ -23,12 +23,19 @@ type LoadState =
   | { status: "live"; data: BvgDeparturesResult }
   | { status: "error"; message: string; data?: BvgDeparturesResult };
 
-/** M2 towards Heinersdorf — keep visible but de-emphasized. */
+/** Less-useful short hops — keep visible but de-emphasized. */
 function isMinorDeparture(dep: BvgDeparture): boolean {
-  return (
-    dep.line.trim().toUpperCase() === "M2" &&
-    dep.direction.toLowerCase().includes("heinersdorf")
-  );
+  const line = dep.line.trim().toUpperCase();
+  const direction = dep.direction.toLowerCase();
+  if (line === "M2" && direction.includes("heinersdorf")) return true;
+  if (
+    line === "158" &&
+    direction.includes("heinersdorf") &&
+    direction.includes("wasserturm")
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function relativeLabel(mins: number | null, cancelled: boolean): string {
