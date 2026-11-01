@@ -8,6 +8,7 @@ import {
   formatTemp,
   weatherLabel,
 } from "@/lib/format";
+import { onForeground } from "@/lib/foreground-refresh";
 import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 import { WeatherIcon } from "./WeatherIcon";
 
@@ -56,9 +57,14 @@ export function WeatherSection({
   const [nowMs, setNowMs] = useState<number | null>(null);
 
   useEffect(() => {
-    setNowMs(Date.now());
-    const tick = window.setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => window.clearInterval(tick);
+    const tickNow = () => setNowMs(Date.now());
+    tickNow();
+    const tick = window.setInterval(tickNow, 30_000);
+    const stopFg = onForeground(tickNow);
+    return () => {
+      window.clearInterval(tick);
+      stopFg();
+    };
   }, []);
 
   useEffect(() => {
@@ -93,9 +99,11 @@ export function WeatherSection({
 
     if (!initialData) void load();
     const id = window.setInterval(() => void load(), POLL_MS);
+    const stopFg = onForeground(() => void load());
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      stopFg();
     };
   }, [initialData]);
 

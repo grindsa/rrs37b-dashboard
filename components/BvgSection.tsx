@@ -7,6 +7,7 @@ import type {
   BvgStopDepartures,
 } from "@/lib/bvg";
 import { formatDelay, formatHourLabel, minutesUntil } from "@/lib/format";
+import { onForeground } from "@/lib/foreground-refresh";
 import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 
 const POLL_MS = 45_000;
@@ -162,9 +163,14 @@ export function BvgSection({
   const [nowMs, setNowMs] = useState<number | null>(null);
 
   useEffect(() => {
-    setNowMs(Date.now());
-    const tick = window.setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => window.clearInterval(tick);
+    const tickNow = () => setNowMs(Date.now());
+    tickNow();
+    const tick = window.setInterval(tickNow, 30_000);
+    const stopFg = onForeground(tickNow);
+    return () => {
+      window.clearInterval(tick);
+      stopFg();
+    };
   }, []);
 
   useEffect(() => {
@@ -199,9 +205,11 @@ export function BvgSection({
 
     if (!initialData) void load();
     const id = window.setInterval(() => void load(), POLL_MS);
+    const stopFg = onForeground(() => void load());
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      stopFg();
     };
   }, [initialData]);
 

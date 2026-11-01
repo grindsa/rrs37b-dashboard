@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { PvSnapshot } from "@/lib/pv";
 import { formatRelativeAge } from "@/lib/format";
+import { onForeground } from "@/lib/foreground-refresh";
 import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 
 const POLL_MS = 30_000;
@@ -47,9 +48,14 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
   const [nowMs, setNowMs] = useState<number | null>(null);
 
   useEffect(() => {
-    setNowMs(Date.now());
-    const id = window.setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => window.clearInterval(id);
+    const tickNow = () => setNowMs(Date.now());
+    tickNow();
+    const id = window.setInterval(tickNow, 30_000);
+    const stopFg = onForeground(tickNow);
+    return () => {
+      window.clearInterval(id);
+      stopFg();
+    };
   }, []);
 
   useEffect(() => {
@@ -84,9 +90,11 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
 
     void load();
     const id = window.setInterval(() => void load(), POLL_MS);
+    const stopFg = onForeground(() => void load());
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      stopFg();
     };
   }, []);
 
