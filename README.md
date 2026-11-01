@@ -50,7 +50,9 @@ $EDITOR .env
 
 ### Every deploy
 
-From the Mac: commit + push `main` to GitHub. On the server:
+Push (or merge) to `main` — GitHub Actions SSHs into the server and runs `./deploy.sh`.
+
+You can also deploy manually on the server:
 
 ```bash
 cd /srv/stacks/rrs37-dashboard
@@ -60,6 +62,25 @@ cd /srv/stacks/rrs37-dashboard
 `deploy.sh` does `git pull --ff-only`, `docker compose build`, and `docker compose up -d`. Check with `docker compose ps` and open `https://rrs37b.mewes-im-netz.de`.
 
 The server must reach the Shelly plugs on the LAN.
+
+### CI deploy (GitHub Actions)
+
+Workflow: `.github/workflows/deploy.yml` (on push to `main` and `workflow_dispatch`).
+
+Add these **repository secrets**:
+
+| Secret | Purpose |
+|--------|---------|
+| `DEPLOY_HOST` | Webserver hostname or IP |
+| `DEPLOY_USER` | SSH user that can run Docker / `deploy.sh` |
+| `DEPLOY_SSH_KEY` | Private key (ed25519) for that user |
+| `DEPLOY_PORT` | Optional SSH port (default `22`) |
+
+One-time server notes:
+
+1. Install the matching **public** key in that user’s `~/.ssh/authorized_keys`.
+2. Ensure `/srv/stacks/rrs37-dashboard` can `git pull` from GitHub non-interactively.
+3. User must be able to run `docker compose` (e.g. membership in the `docker` group).
 
 ## Environment
 
