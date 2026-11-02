@@ -5,7 +5,7 @@ import { getShellyBindings, uniqueGatewayIps } from "@/lib/shelly-config";
 
 /**
  * Lists BTHome devices currently paired on the configured gateway plugs.
- * Use this once to fill SHELLY_SENSOR_* MAC values in .env.
+ * Use this once to fill the sensor `mac` values in config/smarthome.yml.
  */
 export async function GET() {
   await connection();
@@ -20,7 +20,7 @@ export async function GET() {
       hint:
         devices.length === 0
           ? "No BTHome devices found. In each Plug UI: enable Bluetooth observer, add BLU H&T, then add temperature + humidity sensors."
-          : "Copy each device mac into SHELLY_SENSOR_AUSSEN / _ARBEITSZIMMER / _WOHNZIMMER.",
+          : "Copy each device mac into the matching sensors entry in config/smarthome.yml.",
     });
   } catch (error) {
     const message =

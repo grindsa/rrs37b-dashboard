@@ -5,6 +5,7 @@ import {
   findGroup,
   findPlug,
   getSmarthomeConfig,
+  visiblePlugs,
   type SmarthomeConfig,
   type SmarthomeCoverConfig,
   type SmarthomePlugConfig,
@@ -197,7 +198,7 @@ async function loadSnapshot(config: SmarthomeConfig): Promise<{
 
   const [groups, plugs] = await Promise.all([
     Promise.all(groupPromises),
-    Promise.all(config.plugs.map((plug) => readPlugStatus(plug))),
+    Promise.all(visiblePlugs(config).map((plug) => readPlugStatus(plug))),
   ]);
 
   return { groups, plugs };
@@ -245,7 +246,7 @@ export async function getSmarthomeSnapshot(
           error: "Platzhalter — config/smarthome.yml anlegen",
         })),
       })),
-      plugs: loaded.config.plugs.map((plug) => ({
+      plugs: visiblePlugs(loaded.config).map((plug) => ({
         id: plug.id,
         name: plug.name,
         online: false,

@@ -52,6 +52,7 @@ export async function fetchEz1Production(): Promise<Ez1Reading | null> {
     const response = await fetch(url, {
       signal: controller.signal,
       cache: "no-store",
+      redirect: "error",
     });
 
     if (!response.ok) {

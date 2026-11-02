@@ -33,7 +33,7 @@ Build runs **on the webserver** (no image registry). The app joins the existing 
    cd /srv/stacks/rrs37-dashboard
    ```
 
-2. Copy env and fill LAN IPs, sensor MACs, RPC password, lat/lon, BVG stops (and PV keys when ready):
+2. Copy env and fill RPC password, lat/lon, BVG stops (and PV keys when ready). Shelly devices go into `config/smarthome.yml` (see [Config (YAML file)](#config-yaml-file)):
 
    ```bash
    cp .env.example .env
@@ -87,12 +87,10 @@ See `.env.example`. Never commit `.env` (repo is public).
 
 | Variable | Purpose |
 |----------|---------|
-| `SHELLY_PLUG_*` | LAN IPs of Plug S Gen3 BLE gateways |
-| `SHELLY_RPC_PASSWORD` | RPC auth (shared by BLE plugs, Pro 3EM, covers, Plug S) |
+| `SHELLY_RPC_PASSWORD` | Fallback RPC password for Shelly devices without `password` in the YAML |
 | `SMARTHOME_CONFIG_FILE` | Optional path to Smarthome YAML (default `config/smarthome.yml`) |
 | `OPEN_METEO_LAT` / `LON` | Fixed coords for 37B (`52.565379` / `13.441779`) |
 | `BVG_STOP_*` | Stop IDs/labels; 1+2 = default two-column Zuhause, 3+ = picker options |
-| `SHELLY_PRO_3EM_HOST` | Pro 3EM LAN IP — house consumption (`total_act_power`) |
 | `APSYSTEMS_EZ1_HOST` | EZ1-M LAN IP — solar production (`p1 + p2`) |
 | `NOAH_MQTT_URL` | MQTT broker for NOAH SoC (e.g. `mqtt://mosquitto:1883`) |
 | `GROWATT_USERNAME` / `PASSWORD` | Growatt account for noah-mqtt (server `.env` only) |
@@ -131,15 +129,16 @@ Both Plug S Gen3 gateways must have Bluetooth observer enabled and each BLU H&T 
 curl -s http://localhost:3000/api/sensors/discover | jq
 ```
 
-Copy each device `mac` into `.env`:
+The gateways are listed under `plugs` (with `hidden: true`) and the sensors under `sensors` in `config/smarthome.yml`. Discovery queries every gateway referenced by a sensor. Copy each device `mac` into the matching sensor entry:
 
-```env
-SHELLY_SENSOR_AUSSEN=...
-SHELLY_SENSOR_ARBEITSZIMMER=...
-SHELLY_SENSOR_WOHNZIMMER=...
+```yaml
+sensors:
+  - label: Aussen
+    gateway: gw-aussen-arbeit
+    mac: ...
 ```
 
-Restart `npm run dev` / redeploy. Live values: `GET /api/sensors` (45s TTL cache).
+Live values: `GET /api/sensors` (45s TTL cache).
 
 ## Photovoltaik
 
@@ -147,15 +146,17 @@ Tab **Photovoltaik** shows Batterie SoC (NOAH), Erzeugung (EZ1-M), Hausverbrauch
 
 ### 1. Shelly Pro 3EM (house W)
 
-Set in server `.env`:
+Add it under `meters` in `config/smarthome.yml` (the first meter is used):
 
-```env
-SHELLY_PRO_3EM_HOST=192.168.x.y
-# optional; default 0
-SHELLY_PRO_3EM_ID=0
+```yaml
+meters:
+  - id: pro3em
+    ip: 192.168.x.y
+    emId: 0              # optional; default 0
+    password: "…"        # optional, else SHELLY_RPC_PASSWORD
 ```
 
-Uses the existing Shelly Gen2 RPC client (`EM.GetStatus` → `total_act_power`). Same `SHELLY_RPC_PASSWORD` as the plugs when auth is enabled.
+Uses the existing Shelly Gen2 RPC client (`EM.GetStatus` → `total_act_power`).
 
 ### 2. APsystems EZ1-M Local API (solar W)
 
@@ -236,41 +237,55 @@ Control commands always hit devices live and invalidate the status cache. Withou
 
 ### Config (YAML file)
 
-Device layout lives in YAML (not `.env`). RPC password stays in `.env` as `SHELLY_RPC_PASSWORD`.
+All Shelly devices live in YAML (not `.env`): shutter groups, covers, plugs, the BLE gateways, BLU sensors and the Pro 3EM.
 
 ```bash
 cp config/smarthome.example.yml config/smarthome.yml
 $EDITOR config/smarthome.yml
 ```
 
-`config/smarthome.yml` is gitignored. Schema (see the example file for comments):
+`config/smarthome.yml` is gitignored and excluded from the Docker image. Schema (see the example file for comments):
 
 ```yaml
 groups:
   - id: dg
     name: Dachgeschoss
-    covers:
-      - id: dg-ost
-        name: DG Ost
-        ip: 192.168.x.x
-        coverId: 0
+covers:
+  - id: dg-ost
+    name: DG Ost
+    ip: 192.168.x.x
+    coverId: 0
+    group: dg            # required, must match a group id
+    password: "…"        # optional, else SHELLY_RPC_PASSWORD
 plugs:
   - id: plug-1
     name: Shelly Plug S
     ip: 192.168.x.x
     switchId: 0
+  - id: gw-wohnzimmer
+    name: Gateway Wohnzimmer
+    ip: 192.168.x.x
+    hidden: true         # not shown, not switchable
+sensors:
+  - label: Wohnzimmer    # Aussen | Arbeitszimmer | Wohnzimmer
+    gateway: gw-wohnzimmer
+    mac: aa:bb:cc:dd:ee:ff
+meters:
+  - id: pro3em           # first meter = Hausverbrauch
+    ip: 192.168.x.x
+    emId: 0
 ```
 
-- `id` values must be unique across groups, covers, and plugs.
-- `coverId` / `switchId` default to `0` when omitted.
+- `id` values must be unique within each list; sensor labels must be unique.
+- `coverId` / `switchId` / `emId` default to `0` when omitted.
+- `password` is optional on covers, plugs and meters. Without it, `SHELLY_RPC_PASSWORD` is used; the server log lists which devices still fall back. Entries sharing an IP must not have different passwords.
+- Groups without covers are not shown. Unknown `group` or `gateway` references are config errors.
 - Optional path override: `SMARTHOME_CONFIG_FILE` (Compose sets `/app/config/smarthome.yml`).
-- If the live file is missing, the tab shows `config/smarthome.example.yml` (no LAN probes; control disabled).
+- If the live file is missing, the tab shows `config/smarthome.example.yml` (no LAN probes; control, sensors and Hausverbrauch disabled).
 
-Docker mounts `./config` into the container. After editing on the server:
+Since the file can hold passwords, restrict it on the server to the deploy user and the container user (`node`, UID 1000), e.g. `chown <deploy-user>:1000 config/smarthome.yml && chmod 640 config/smarthome.yml`.
 
-```bash
-./deploy.sh
-```
+Docker mounts `./config` into the container; edits are picked up on the next request without a redeploy.
 
 Phase 2 (later): target %-position via `Cover.GoToPosition`.
 

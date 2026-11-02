@@ -1,49 +1,91 @@
-# Smarthome layout — copy to config/smarthome.yml and set real LAN IPs.
-# RPC password stays in .env (SHELLY_RPC_PASSWORD).
+# Shelly device inventory — copy to config/smarthome.yml and set real LAN IPs.
 #
 #   cp config/smarthome.example.yml config/smarthome.yml
 #
 # Optional override path: SMARTHOME_CONFIG_FILE=/absolute/or/relative/path.yml
+#
+# Every device (cover, plug, meter) accepts an optional `password` (quoted
+# string). Without it, SHELLY_RPC_PASSWORD from .env is used. Entries sharing
+# an IP share one password. Generate one per device: openssl rand -base64 15
+# This file then holds secrets — keep it readable only by the deploy user and
+# the container user.
 
+# Shutter groups, shown in this order. Groups without covers are hidden.
 groups:
   - id: dg
     name: Dachgeschoss
-    covers:
-      - id: dg-ost
-        name: DG Ost
-        ip: 192.168.0.101
-        coverId: 0
-      - id: dg-west
-        name: DG West
-        ip: 192.168.0.102
-        coverId: 0
-
   - id: og1
     name: 1. OG
-    covers:
-      - id: og1-nord
-        name: 1.OG Nord
-        ip: 192.168.0.111
-        coverId: 0
-      - id: og1-sued
-        name: 1.OG Süd
-        ip: 192.168.0.112
-        coverId: 0
-
   - id: eg
     name: Erdgeschoss
-    covers:
-      - id: eg-terrasse
-        name: EG Terrasse
-        ip: 192.168.0.121
-        coverId: 0
-      - id: eg-strasse
-        name: EG Straße
-        ip: 192.168.0.122
-        coverId: 0
 
+# Shelly 2PM covers. `group` (required) must match a group id above.
+covers:
+  - id: dg-ost
+    name: DG Ost
+    ip: 192.168.0.101
+    coverId: 0
+    group: dg
+    password: "change-me-dg-ost"
+  - id: dg-west
+    name: DG West
+    ip: 192.168.0.102
+    coverId: 0
+    group: dg
+  - id: og1-nord
+    name: 1.OG Nord
+    ip: 192.168.0.111
+    coverId: 0
+    group: og1
+  - id: og1-sued
+    name: 1.OG Süd
+    ip: 192.168.0.112
+    coverId: 0
+    group: og1
+  - id: eg-terrasse
+    name: EG Terrasse
+    ip: 192.168.0.121
+    coverId: 0
+    group: eg
+  - id: eg-strasse
+    name: EG Straße
+    ip: 192.168.0.122
+    coverId: 0
+    group: eg
+
+# Shelly Plug S. `hidden: true` (default false) keeps a plug out of the
+# Smarthome tab and blocks switching it — use it for BLE gateways.
 plugs:
   - id: plug-1
     name: Shelly Plug S
     ip: 192.168.0.130
     switchId: 0
+  - id: gw-aussen-arbeit
+    name: Gateway Außen/Arbeitszimmer
+    ip: 192.168.0.10
+    switchId: 0
+    hidden: true
+  - id: gw-wohnzimmer
+    name: Gateway Wohnzimmer
+    ip: 192.168.0.11
+    switchId: 0
+    hidden: true
+
+# BLU H&T sensors. `label` is one of Aussen, Arbeitszimmer, Wohnzimmer;
+# `gateway` must match a plug id. Get `mac` from GET /api/sensors/discover.
+sensors:
+  - label: Aussen
+    gateway: gw-aussen-arbeit
+    mac: aa:bb:cc:00:11:22
+  - label: Arbeitszimmer
+    gateway: gw-aussen-arbeit
+    mac: aa:bb:cc:00:11:33
+  - label: Wohnzimmer
+    gateway: gw-wohnzimmer
+    mac: aa:bb:cc:00:11:44
+
+# Shelly Pro 3EM. The first meter is used for Hausverbrauch on the PV tab.
+meters:
+  - id: pro3em
+    ip: 192.168.0.40
+    emId: 0

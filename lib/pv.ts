@@ -6,7 +6,7 @@
 import { cacheGetOrSet, CACHE_TTL } from "./cache";
 import { fetchEz1Production } from "./pv-ez1";
 import { fetchNoahReading } from "./pv-noah";
-import { fetchShellyPro3Em } from "./pv-shelly-em";
+import { fetchShellyPro3Em, getHouseMeter } from "./pv-shelly-em";
 
 export type PvSnapshot = {
   socPct: number | null;
@@ -77,15 +77,14 @@ async function loadPvSnapshot(): Promise<PvSnapshot> {
     );
   }
 
-  if (!envSet("SHELLY_PRO_3EM_HOST")) {
-    warnings.push(
-      "SHELLY_PRO_3EM_HOST nicht gesetzt — Hausverbrauch noch nicht angebunden.",
-    );
+  const houseMeter = getHouseMeter();
+  if (!houseMeter.ok) {
+    warnings.push(houseMeter.warning);
   } else {
     tasks.push(
-      fetchShellyPro3Em()
+      fetchShellyPro3Em(houseMeter.meter)
         .then((reading) => {
-          if (reading) houseW = reading.totalActPowerW;
+          houseW = reading.totalActPowerW;
         })
         .catch((error: unknown) => {
           warnings.push(

@@ -144,6 +144,7 @@ async function postRpc(
     body: JSON.stringify(body),
     signal,
     cache: "no-store",
+    redirect: "error",
   });
 }
 
@@ -175,7 +176,7 @@ async function shellyRpcUnlocked<T>(
   method: string,
   params?: Record<string, unknown>,
 ): Promise<T> {
-  const password = getShellyRpcPassword();
+  const { password, source } = getShellyRpcPassword(host);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), RPC_TIMEOUT_MS);
 
@@ -192,7 +193,7 @@ async function shellyRpcUnlocked<T>(
     if (response.status === 401) {
       if (!password) {
         throw new ShellyRpcError(
-          "Shelly RPC auth required — set SHELLY_RPC_PASSWORD",
+          "Shelly RPC auth required — set a password in smarthome.yml or SHELLY_RPC_PASSWORD",
           host,
           401,
         );
@@ -220,7 +221,7 @@ async function shellyRpcUnlocked<T>(
       if (response.status === 401) {
         sessions.delete(host);
         throw new ShellyRpcError(
-          "Shelly RPC auth failed — check SHELLY_RPC_PASSWORD",
+          `Shelly RPC auth failed — check ${source}`,
           host,
           401,
         );

@@ -214,7 +214,7 @@ function deviceToSensor(
   if (!device) {
     if (!binding.mac) {
       warningSink.push(
-        `${binding.label}: no SHELLY_SENSOR_* MAC set and no BTHome device named "${binding.label}" on ${binding.gatewayIp}`,
+        `${binding.label}: no mac in smarthome.yml and no BTHome device named "${binding.label}" on ${binding.gatewayIp}`,
       );
     } else {
       warningSink.push(
