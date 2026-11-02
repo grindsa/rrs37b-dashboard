@@ -27,10 +27,16 @@ if ! git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$ROOT
   git config --global --add safe.directory "$ROOT"
 fi
 
-echo "==> Fetching ${BRANCH} in ${ROOT}"
-git fetch origin
-git checkout "$BRANCH"
-git pull --ff-only origin "$BRANCH"
+if [[ -z "${RRS37_DEPLOY_UPDATED:-}" ]]; then
+  echo "==> Fetching ${BRANCH} in ${ROOT}"
+  git fetch origin
+  git checkout "$BRANCH"
+  git pull --ff-only origin "$BRANCH"
+  # Bash keeps executing the pre-pull copy of this file, so restart on the
+  # version that was just checked out.
+  export RRS37_DEPLOY_UPDATED=1
+  exec "$ROOT/deploy.sh" "$@"
+fi
 
 BUILD_TIME="$(TZ=Europe/Berlin date +%Y-%m-%d-%H-%M-%S)"
 export BUILD_TIME
