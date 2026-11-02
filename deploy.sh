@@ -34,6 +34,17 @@ git pull --ff-only origin "$BRANCH"
 
 BUILD_TIME="$(TZ=Europe/Berlin date +%Y-%m-%d-%H-%M-%S)"
 export BUILD_TIME
+
+# Enable Growatt NOAH bridge sidecars when credentials are present in .env.
+COMPOSE_PROFILES="${COMPOSE_PROFILES:-}"
+if [[ -z "${COMPOSE_PROFILES}" ]] && grep -qE '^[[:space:]]*GROWATT_USERNAME=[^[:space:]#]+' .env; then
+  COMPOSE_PROFILES="noah"
+fi
+if [[ -n "${COMPOSE_PROFILES}" ]]; then
+  export COMPOSE_PROFILES
+  echo "==> Compose profiles: ${COMPOSE_PROFILES}"
+fi
+
 echo "==> Building and starting containers (version ${BUILD_TIME})"
 if ! docker compose build --build-arg "BUILD_TIME=${BUILD_TIME}"; then
   echo "ERROR: docker compose build failed" >&2
@@ -52,6 +63,16 @@ if ! docker compose ps --status running --services | grep -qx 'rrs37-dashboard';
   echo "ERROR: rrs37-dashboard container is not running after deploy" >&2
   docker compose ps >&2 || true
   exit 1
+fi
+
+if [[ "${COMPOSE_PROFILES:-}" == *noah* ]]; then
+  for svc in mosquitto noah-mqtt; do
+    if ! docker compose ps --status running --services | grep -qx "$svc"; then
+      echo "ERROR: ${svc} container is not running (profile noah)" >&2
+      docker compose ps >&2 || true
+      exit 1
+    fi
+  done
 fi
 
 echo "==> Clearing Docker build cache"

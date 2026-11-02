@@ -18,9 +18,45 @@ services:
       - HOSTNAME=0.0.0.0
     networks:
       - proxy
+      - pv
     expose:
       - "3000"
+
+  # Optional Growatt bridge stack — enable with Compose profile `noah`
+  # (deploy.sh enables it automatically when GROWATT_USERNAME is set).
+  mosquitto:
+    profiles: ["noah"]
+    image: eclipse-mosquitto:2
+    container_name: rrs37-mosquitto
+    restart: unless-stopped
+    volumes:
+      - ./deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    networks:
+      - pv
+    # LAN-only; not published on the host by default.
+
+  noah-mqtt:
+    profiles: ["noah"]
+    image: ghcr.io/mtrossbach/noah-mqtt:latest
+    container_name: rrs37-noah-mqtt
+    restart: unless-stopped
+    environment:
+      # Required when profile `noah` is enabled (deploy.sh checks GROWATT_USERNAME).
+      GROWATT_USERNAME: ${GROWATT_USERNAME:-}
+      GROWATT_PASSWORD: ${GROWATT_PASSWORD:-}
+      GROWATT_API_MODE: ${GROWATT_API_MODE:-web}
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-noah2mqtt}
+      POLLING_INTERVAL: ${NOAH_POLLING_INTERVAL:-30}
+      LOG_LEVEL: ${NOAH_LOG_LEVEL:-INFO}
+    depends_on:
+      - mosquitto
+    networks:
+      - pv
 
 networks:
   proxy:
     external: true
+  pv:
+    driver: bridge

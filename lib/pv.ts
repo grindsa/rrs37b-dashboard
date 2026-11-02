@@ -1,54 +1,117 @@
-import { cacheGetOrSet, CACHE_TTL } from "./cache";
-
 /**
  * Photovoltaik snapshot — Growatt NOAH (SoC via noah-mqtt), APsystems EZ1-M
- * (solar W), Shelly Pro 3EM (house W). No live bridges yet; returns placeholders
- * until MQTT / LAN IPs are wired.
+ * (solar W), Shelly Pro 3EM (house W).
  */
+
+import { cacheGetOrSet, CACHE_TTL } from "./cache";
+import { fetchEz1Production } from "./pv-ez1";
+import { fetchNoahReading } from "./pv-noah";
+import { fetchShellyPro3Em } from "./pv-shelly-em";
+
 export type PvSnapshot = {
   socPct: number | null;
+  /** Battery charge power (W) when NOAH reports it. */
+  chargeW: number | null;
+  /** Battery discharge power (W) when NOAH reports it. */
+  dischargeW: number | null;
   solarW: number | null;
   houseW: number | null;
+  /** solarW − houseW when both readings exist. */
+  netW: number | null;
   fetchedAt: string;
   warnings: string[];
 };
 
-function envHost(name: string): string | null {
-  const v = process.env[name]?.trim();
-  return v || null;
+function warningFrom(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+}
+
+function envSet(name: string): boolean {
+  return Boolean(process.env[name]?.trim());
+}
+
+async function loadPvSnapshot(): Promise<PvSnapshot> {
+  const warnings: string[] = [];
+
+  let socPct: number | null = null;
+  let chargeW: number | null = null;
+  let dischargeW: number | null = null;
+  let solarW: number | null = null;
+  let houseW: number | null = null;
+
+  const tasks: Promise<void>[] = [];
+
+  if (!envSet("NOAH_MQTT_URL")) {
+    warnings.push(
+      "NOAH_MQTT_URL nicht gesetzt — Batterie-SoC noch nicht angebunden.",
+    );
+  } else {
+    tasks.push(
+      fetchNoahReading()
+        .then((reading) => {
+          if (!reading) return;
+          socPct = reading.socPct;
+          chargeW = reading.chargeW;
+          dischargeW = reading.dischargeW;
+        })
+        .catch((error: unknown) => {
+          warnings.push(warningFrom(error, "NOAH SoC nicht verfügbar"));
+        }),
+    );
+  }
+
+  if (!envSet("APSYSTEMS_EZ1_HOST")) {
+    warnings.push(
+      "APSYSTEMS_EZ1_HOST nicht gesetzt — Erzeugung noch nicht angebunden.",
+    );
+  } else {
+    tasks.push(
+      fetchEz1Production()
+        .then((reading) => {
+          if (reading) solarW = reading.solarW;
+        })
+        .catch((error: unknown) => {
+          warnings.push(warningFrom(error, "EZ1-M Solar-W nicht verfügbar"));
+        }),
+    );
+  }
+
+  if (!envSet("SHELLY_PRO_3EM_HOST")) {
+    warnings.push(
+      "SHELLY_PRO_3EM_HOST nicht gesetzt — Hausverbrauch noch nicht angebunden.",
+    );
+  } else {
+    tasks.push(
+      fetchShellyPro3Em()
+        .then((reading) => {
+          if (reading) houseW = reading.totalActPowerW;
+        })
+        .catch((error: unknown) => {
+          warnings.push(
+            warningFrom(error, "Shelly Pro 3EM Hausverbrauch nicht verfügbar"),
+          );
+        }),
+    );
+  }
+
+  await Promise.all(tasks);
+
+  const netW =
+    solarW !== null && houseW !== null ? solarW - houseW : null;
+
+  return {
+    socPct,
+    chargeW,
+    dischargeW,
+    solarW,
+    houseW,
+    netW,
+    fetchedAt: new Date().toISOString(),
+    warnings,
+  };
 }
 
 export async function getPvSnapshot(): Promise<PvSnapshot> {
-  return cacheGetOrSet("pv:snapshot", CACHE_TTL.pv, async () => {
-    const warnings: string[] = [];
-    const noahMqtt = envHost("NOAH_MQTT_URL");
-    const ez1 = envHost("APSYSTEMS_EZ1_HOST");
-    const shellyEm = envHost("SHELLY_PRO_3EM_HOST");
-
-    if (!noahMqtt) {
-      warnings.push("NOAH_MQTT_URL nicht gesetzt — SoC noch nicht angebunden.");
-    } else {
-      warnings.push("noah-mqtt Bridge noch nicht implementiert.");
-    }
-    if (!ez1) {
-      warnings.push("APSYSTEMS_EZ1_HOST nicht gesetzt — Solar-W noch nicht angebunden.");
-    } else {
-      warnings.push("APsystems EZ1-M (:8050) Bridge noch nicht implementiert.");
-    }
-    if (!shellyEm) {
-      warnings.push(
-        "SHELLY_PRO_3EM_HOST nicht gesetzt — Hausverbrauch noch nicht angebunden.",
-      );
-    } else {
-      warnings.push("Shelly Pro 3EM EM.GetStatus Bridge noch nicht implementiert.");
-    }
-
-    return {
-      socPct: null,
-      solarW: null,
-      houseW: null,
-      fetchedAt: new Date().toISOString(),
-      warnings,
-    };
-  });
+  return cacheGetOrSet("pv:snapshot", CACHE_TTL.pv, loadPvSnapshot);
 }

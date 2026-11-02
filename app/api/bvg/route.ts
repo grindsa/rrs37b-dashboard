@@ -2,11 +2,15 @@ import { connection } from "next/server";
 import { NextResponse } from "next/server";
 import { getBvgDepartures } from "@/lib/bvg";
 
-export async function GET() {
+export async function GET(request: Request) {
   await connection();
 
+  const { searchParams } = new URL(request.url);
+  const stopId = searchParams.get("stopId")?.trim() || undefined;
+  const stopName = searchParams.get("name")?.trim() || undefined;
+
   try {
-    const result = await getBvgDepartures();
+    const result = await getBvgDepartures({ stopId, stopName });
     return NextResponse.json(result);
   } catch (error) {
     const message =
@@ -16,6 +20,8 @@ export async function GET() {
         stops: [],
         fetchedAt: new Date().toISOString(),
         warnings: [message],
+        candidates: [],
+        mode: stopId ? "stop" : "home",
         error: message,
       },
       { status: 500 },

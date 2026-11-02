@@ -14,8 +14,11 @@ export async function GET() {
     return NextResponse.json(
       {
         socPct: null,
+        chargeW: null,
+        dischargeW: null,
         solarW: null,
         houseW: null,
+        netW: null,
         fetchedAt: new Date().toISOString(),
         warnings: [message],
         error: message,

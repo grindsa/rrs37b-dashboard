@@ -1,14 +1,15 @@
 # RRS37-Dashboard
 
-Local infoboard for **Romain-Rolland-Straße 37B, Berlin** — Shelly BLU H&T sensors, Open-Meteo weather, and live BVG departures.
+Local infoboard for **Romain-Rolland-Straße 37B, Berlin** — Shelly BLU H&T sensors, Open-Meteo weather, live BVG departures, and Photovoltaik (battery SoC, solar W, house W).
 
-Public site (planned): `https://rrs37b.mewes-im-netz.de`
+Public site: `https://rrs37b.mewes-im-netz.de`
 
 ## Stack
 
 - **Next.js** (App Router) + TypeScript + Tailwind
 - **Docker Compose** on your own webserver (build on the server, no registry)
 - Reverse proxy: **nginx** or **Caddy** (example configs in `docs/`)
+- Optional Compose profile `noah`: Mosquitto + [noah-mqtt](https://github.com/mtrossbach/noah-mqtt) for Growatt NOAH 2000
 - No database in MVP; in-memory TTL cache in the Node process
 
 ## Local development
@@ -34,7 +35,7 @@ git clone git@github.com:YOU/RRS37-Dashboard.git /srv/stacks/rrs37-dashboard
 cd /srv/stacks/rrs37-dashboard
 ```
 
-2. Copy env and fill LAN IPs, sensor MACs, RPC password, lat/lon, BVG stops:
+2. Copy env and fill LAN IPs, sensor MACs, RPC password, lat/lon, BVG stops (and PV keys when ready):
 
 ```bash
 cp .env.example .env
@@ -59,9 +60,9 @@ cd /srv/stacks/rrs37-dashboard
 ./deploy.sh
 ```
 
-`deploy.sh` does `git pull --ff-only`, `docker compose build`, and `docker compose up -d`. Check with `docker compose ps` and open `https://rrs37b.mewes-im-netz.de`.
+`deploy.sh` does `git pull --ff-only`, `docker compose build`, and `docker compose up -d`. If `GROWATT_USERNAME` is set in `.env`, it also starts the `noah` Compose profile (Mosquitto + noah-mqtt). Check with `docker compose ps` and open `https://rrs37b.mewes-im-netz.de`.
 
-The server must reach the Shelly plugs on the LAN.
+The server must reach Shelly devices and the EZ1-M on the LAN.
 
 ### CI deploy (GitHub Actions)
 
@@ -89,9 +90,13 @@ See `.env.example`. Never commit `.env` (repo is public).
 | Variable | Purpose |
 |----------|---------|
 | `SHELLY_PLUG_*` | LAN IPs of Plug S Gen3 BLE gateways |
-| `SHELLY_RPC_PASSWORD` | RPC auth (set when enabling on the plugs) |
+| `SHELLY_RPC_PASSWORD` | RPC auth (shared by plugs + Pro 3EM when enabled) |
 | `OPEN_METEO_LAT` / `LON` | Fixed coords for 37B (`52.565379` / `13.441779`) |
-| `BVG_STOP_*` | Stop IDs and labels for the 30‑minute window |
+| `BVG_STOP_*` | Stop IDs/labels; 1+2 = default two-column Zuhause, 3+ = picker options |
+| `SHELLY_PRO_3EM_HOST` | Pro 3EM LAN IP — house consumption (`total_act_power`) |
+| `APSYSTEMS_EZ1_HOST` | EZ1-M LAN IP — solar production (`p1 + p2`) |
+| `NOAH_MQTT_URL` | MQTT broker for NOAH SoC (e.g. `mqtt://mosquitto:1883`) |
+| `GROWATT_USERNAME` / `PASSWORD` | Growatt account for noah-mqtt (server `.env` only) |
 
 ## Repo layout
 
@@ -99,10 +104,16 @@ See `.env.example`. Never commit `.env` (repo is public).
 app/                 # UI + route handlers
 components/
 lib/
-  shelly.ts          # LAN RPC → sensors
+  shelly.ts          # LAN RPC → BLU sensors
+  pv.ts              # Photovoltaik orchestrator
+  pv-shelly-em.ts    # Pro 3EM house W
+  pv-ez1.ts          # EZ1-M solar W
+  pv-noah.ts         # NOAH SoC via MQTT
   weather.ts         # Open-Meteo
   bvg.ts             # transport.rest
   cache.ts           # in-memory TTL
+deploy/
+  mosquitto/         # broker config for profile `noah`
 Dockerfile
 docker-compose.yml
 deploy.sh
@@ -127,6 +138,81 @@ SHELLY_SENSOR_WOHNZIMMER=...
 
 Restart `npm run dev` / redeploy. Live values: `GET /api/sensors` (45s TTL cache).
 
+## Photovoltaik
+
+Tab **Photovoltaik** shows Batterie SoC (NOAH), Erzeugung (EZ1-M), Hausverbrauch (Pro 3EM), and Saldo when both power readings exist. All device calls are server-side (`GET /api/pv`, ~30s TTL).
+
+### 1. Shelly Pro 3EM (house W)
+
+Set in server `.env`:
+
+```env
+SHELLY_PRO_3EM_HOST=192.168.x.y
+# optional; default 0
+SHELLY_PRO_3EM_ID=0
+```
+
+Uses the existing Shelly Gen2 RPC client (`EM.GetStatus` → `total_act_power`). Same `SHELLY_RPC_PASSWORD` as the plugs when auth is enabled.
+
+### 2. APsystems EZ1-M Local API (solar W)
+
+Local HTTP is **off by default**. Enable it once in **AP EasyPower**:
+
+1. Connect to the EZ1-M via Bluetooth (direct connection).
+2. If **Settings → Local Mode** is missing, sign out of the APsystems cloud account in the app and reconnect over Bluetooth only.
+3. Open **Settings → Local Mode**, turn **Enable Local Mode** on, set level to **Continuously**.
+4. Note the inverter LAN IP shown in the app.
+
+Then set:
+
+```env
+APSYSTEMS_EZ1_HOST=192.168.x.y
+# optional; default 8050
+APSYSTEMS_EZ1_PORT=8050
+```
+
+The dashboard calls `GET http://<IP>:8050/getOutputData` and sums `p1 + p2` (W). If Local Mode is off or the host is unreachable, the PV tab shows a warning and leaves Erzeugung as `—`.
+
+Quick check from the server:
+
+```bash
+curl -s "http://$APSYSTEMS_EZ1_HOST:8050/getOutputData"
+```
+
+### 3. Growatt NOAH 2000 (SoC via noah-mqtt)
+
+NOAH has no clean local API. The Compose profile `noah` runs:
+
+- **Mosquitto** on the internal `pv` network
+- **noah-mqtt** (`ghcr.io/mtrossbach/noah-mqtt`) which polls Growatt and publishes JSON to `noah2mqtt/{serial}` (field `soc`)
+
+On the server `.env` (never commit):
+
+```env
+GROWATT_USERNAME=your-growatt-user
+GROWATT_PASSWORD=your-growatt-password
+GROWATT_API_MODE=web
+
+NOAH_MQTT_URL=mqtt://mosquitto:1883
+NOAH_MQTT_TOPIC=noah2mqtt/+
+```
+
+Redeploy:
+
+```bash
+./deploy.sh
+# or manually:
+# COMPOSE_PROFILES=noah docker compose up -d
+```
+
+`deploy.sh` turns on profile `noah` automatically when `GROWATT_USERNAME` is set. The dashboard keeps a short-lived MQTT subscriber in-process and reads appliance SoC (plus charge/discharge W when present).
+
+Pin a single device if you have several:
+
+```env
+NOAH_MQTT_TOPIC=noah2mqtt/0ABC00AA15AA00AA
+```
+
 ## Roadmap
 
 1. ~~Scaffold~~
@@ -134,4 +220,5 @@ Restart `npm run dev` / redeploy. Live values: `GET /api/sensors` (45s TTL cache
 3. ~~Shelly LAN adapter~~ (pair BTHome devices on the Plugs, then set MACs)
 4. ~~Open-Meteo + BVG + cache TTLs~~
 5. ~~RPC password, offline states, polish~~
-6. Deploy to `rrs37b.mewes-im-netz.de`
+6. ~~Photovoltaik tab + Pro 3EM / EZ1-M / noah-mqtt adapters~~
+7. Deploy to `rrs37b.mewes-im-netz.de`
