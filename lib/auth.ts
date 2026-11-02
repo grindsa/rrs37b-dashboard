@@ -1,7 +1,10 @@
 import { createHmac, createHash, timingSafeEqual } from "node:crypto";
 import { cookies } from "next/headers";
 
-export const SESSION_COOKIE = "rrs37_session";
+// The __Host- prefix makes browsers reject this cookie name from sibling
+// subdomains, but it requires Secure, which plain-HTTP dev cannot use.
+export const SESSION_COOKIE =
+  process.env.NODE_ENV === "production" ? "__Host-rrs37_session" : "rrs37_session";
 export const MAX_ACCESS_TOKENS = 5;
 /** Session lifetime after a successful token unlock. */
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days

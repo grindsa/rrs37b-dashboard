@@ -1,16 +1,14 @@
 import { connection } from "next/server";
 import { NextResponse } from "next/server";
+import { readJsonBody } from "@/lib/request-guard";
 import { runPlugSet } from "@/lib/smarthome";
 
 export async function POST(request: Request) {
   await connection();
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "Ungültiger JSON-Body" }, { status: 400 });
-  }
+  const parsed = await readJsonBody(request);
+  if (!parsed.ok) return parsed.response;
+  const { body } = parsed;
 
   const plugId =
     body &&

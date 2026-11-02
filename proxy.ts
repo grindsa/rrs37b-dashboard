@@ -5,6 +5,7 @@ import {
   sessionCookieOptions,
   verifySessionValue,
 } from "@/lib/auth";
+import { isSameOriginRequest, isStateChangingMethod } from "@/lib/request-guard";
 
 /**
  * Next.js 16: `middleware` was renamed to `proxy`.
@@ -13,6 +14,14 @@ import {
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  if (
+    pathname.startsWith("/api/") &&
+    isStateChangingMethod(request.method) &&
+    !isSameOriginRequest(request.headers)
+  ) {
+    return NextResponse.json({ error: "cross_origin" }, { status: 403 });
+  }
 
   const isAuthApi =
     pathname === "/api/auth/login" ||

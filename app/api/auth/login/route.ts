@@ -6,18 +6,18 @@ import {
   SESSION_TTL_SECONDS,
   sessionCookieOptions,
 } from "@/lib/auth";
+import { readJsonBody } from "@/lib/request-guard";
 
 export async function POST(request: Request) {
-  let token = "";
-  try {
-    const body = (await request.json()) as { token?: unknown };
-    if (typeof body.token === "string") token = body.token;
-  } catch {
+  const parsed = await readJsonBody(request);
+  if (!parsed.ok) {
     return NextResponse.json(
       { ok: false, error: "invalid_body" },
-      { status: 400 },
+      { status: parsed.response.status },
     );
   }
+  const body = parsed.body as { token?: unknown } | null;
+  const token = typeof body?.token === "string" ? body.token : "";
 
   if (!process.env.AUTH_SECRET?.trim()) {
     return NextResponse.json(
