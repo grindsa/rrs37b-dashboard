@@ -24,15 +24,19 @@ type LoadState =
   | { status: "live"; data: BvgDeparturesResult }
   | { status: "error"; message: string; data?: BvgDeparturesResult };
 
-/** 158 → Heinersdorf, Am Wasserturm — keep visible but de-emphasized. */
+/** Less-useful short hops — keep visible but de-emphasized. */
 function isMinorDeparture(dep: BvgDeparture): boolean {
   const line = dep.line.trim().toUpperCase();
   const direction = dep.direction.toLowerCase();
-  return (
+  if (line === "M2" && direction.includes("heinersdorf")) return true;
+  if (
     line === "158" &&
     direction.includes("heinersdorf") &&
     direction.includes("wasserturm")
-  );
+  ) {
+    return true;
+  }
+  return false;
 }
 
 function relativeLabel(mins: number | null, cancelled: boolean): string {
