@@ -55,6 +55,25 @@ type ShellyAuth = {
 /** Per-host digest sessions (nonce reuse with incrementing nc). */
 const sessions = new Map<string, AuthSession>();
 
+/**
+ * Serialize RPC per host. Parallel calls otherwise race on digest `nc` /
+ * session refresh → 401 storms → Shelly auth backoff (HTTP 429).
+ */
+const hostTails = new Map<string, Promise<unknown>>();
+
+function withHostLock<T>(host: string, fn: () => Promise<T>): Promise<T> {
+  const prev = hostTails.get(host) ?? Promise.resolve();
+  const run = prev.catch(() => undefined).then(fn);
+  hostTails.set(
+    host,
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
+  );
+  return run;
+}
+
 function sha256Hex(value: string): string {
   return createHash("sha256").update(value).digest("hex");
 }
@@ -151,7 +170,7 @@ async function parseResult<T>(
   return payload.result;
 }
 
-export async function shellyRpc<T>(
+async function shellyRpcUnlocked<T>(
   host: string,
   method: string,
   params?: Record<string, unknown>,
@@ -209,6 +228,7 @@ export async function shellyRpc<T>(
     }
 
     if (response.status === 429) {
+      sessions.delete(host);
       throw new ShellyRpcError(
         "Shelly RPC rate-limited (auth backoff) — retry shortly",
         host,
@@ -229,4 +249,12 @@ export async function shellyRpc<T>(
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function shellyRpc<T>(
+  host: string,
+  method: string,
+  params?: Record<string, unknown>,
+): Promise<T> {
+  return withHostLock(host, () => shellyRpcUnlocked<T>(host, method, params));
 }
