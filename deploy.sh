@@ -79,5 +79,7 @@ echo "==> Clearing Docker build cache"
 docker builder prune -af
 
 echo "Deploy complete."
+# Checked by .github/workflows/deploy.yml; must stay the last line of output.
+echo "RRS37_DEPLOY_OK"
 
 

@@ -5,6 +5,8 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions: {}
+
 concurrency:
   group: deploy-production
   cancel-in-progress: false
@@ -14,27 +16,36 @@ jobs:
     name: Deploy to webserver
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Required reviewers are configured on the environment in repo settings.
+    environment: production
 
     steps:
+      - name: Require host key fingerprint
+        env:
+          DEPLOY_HOST_FINGERPRINT: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
+        run: |
+          if [[ -z "$DEPLOY_HOST_FINGERPRINT" ]]; then
+            echo "::error::Secret DEPLOY_HOST_FINGERPRINT is not set; refusing to deploy without host key verification."
+            exit 1
+          fi
+
       - name: Deploy via SSH
         id: remote_deploy
-        uses: appleboy/ssh-action@v1.2.2
+        # appleboy/ssh-action v1.2.2
+        uses: appleboy/ssh-action@2ead5e36573f08b82fbfce1504f1a4b05a647c6f
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT || 22 }}
+          fingerprint: ${{ secrets.DEPLOY_HOST_FINGERPRINT }}
           command_timeout: 25m
           # Capture stdout so we can assert the remote script finished cleanly.
           # entrypoint.sh uses pipefail, so a non-zero drone-ssh exit still fails this step.
           capture_stdout: true
-          script: |
-            #!/usr/bin/env bash
-            set -euo pipefail
-            cd /srv/stacks/rrs37-dashboard
-            git config --global --add safe.directory /srv/stacks/rrs37-dashboard
-            ./deploy.sh
-            printf '%s\n' 'RRS37_DEPLOY_OK'
+          # Ignored once the server pins this key to deploy.sh via a forced
+          # command in authorized_keys; kept so deploys work before that.
+          script: /srv/stacks/rrs37-dashboard/deploy.sh
 
       # Defense in depth: if appleboy/drone-ssh ever reports success after a
       # partial remote failure, missing this marker still fails the job.
