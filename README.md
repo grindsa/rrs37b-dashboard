@@ -1,8 +1,6 @@
 # RRS37-Dashboard
 
-Local infoboard for **Romain-Rolland-Straße 37B, Berlin** — Shelly BLU H&T sensors, Open-Meteo weather, live BVG departures, Photovoltaik (battery SoC, solar W, house W), and Smarthome (Cover / Plug S).
-
-Public site: `https://rrs37b.mewes-im-netz.de`
+Local infoboard for *My Home** — Shelly BLU H&T sensors, Open-Meteo weather, live Public train departures, Photovoltaik (battery SoC, solar W, house W), and Smarthome (Cover / Plug S).
 
 ## Stack
 
@@ -30,22 +28,22 @@ Build runs **on the webserver** (no image registry). The app joins the existing 
 
 1. Install Docker + Compose, clone into `/srv/stacks/rrs37-dashboard`:
 
-```bash
-git clone git@github.com:YOU/RRS37-Dashboard.git /srv/stacks/rrs37-dashboard
-cd /srv/stacks/rrs37-dashboard
-```
+   ```bash
+   git clone git@github.com:YOU/RRS37-Dashboard.git /srv/stacks/rrs37-dashboard
+   cd /srv/stacks/rrs37-dashboard
+   ```
 
 2. Copy env and fill LAN IPs, sensor MACs, RPC password, lat/lon, BVG stops (and PV keys when ready):
 
-```bash
-cp .env.example .env
-$EDITOR .env
-```
+   ```bash
+   cp .env.example .env
+   $EDITOR .env
+   ```
 
 3. Add the Caddy/nginx snippet and proxy env vars; upstream is `rrs37-dashboard:3000` on network `proxy`:
 
-- Caddy: `docs/Caddyfile.example`
-- nginx: `docs/nginx.example.conf`
+   - Caddy: `docs/Caddyfile.example`
+   - nginx: `docs/nginx.example.conf`
 
 4. Point DNS A/AAAA for `rrs37b.mewes-im-netz.de` at the server.
 
@@ -101,7 +99,7 @@ See `.env.example`. Never commit `.env` (repo is public).
 
 ## Repo layout
 
-```
+```dir
 app/                 # UI + route handlers
 components/
 lib/
