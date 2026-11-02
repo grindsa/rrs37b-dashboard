@@ -6,8 +6,12 @@ ARG NODE_VERSION=22-bookworm-slim
 FROM node:${NODE_VERSION} AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
+# Retries help on flaky server→registry links (ETIMEDOUT during npm ci).
 RUN --mount=type=cache,target=/root/.npm \
-  npm ci --no-audit --no-fund
+  npm ci --no-audit --no-fund \
+    --fetch-retries=5 \
+    --fetch-retry-mintimeout=20000 \
+    --fetch-retry-maxtimeout=120000
 
 FROM node:${NODE_VERSION} AS builder
 WORKDIR /app
