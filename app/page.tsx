@@ -1,7 +1,10 @@
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Header } from "@/components/Header";
-import { DashboardTabs } from "@/components/DashboardTabs";
+import {
+  DashboardTabPanel,
+  DashboardTabs,
+} from "@/components/DashboardTabs";
 import { LockedPanel } from "@/components/LockedPanel";
 import {
   SensorsPlaceholder,
@@ -11,18 +14,12 @@ import {
   WeatherPlaceholder,
   WeatherSection,
 } from "@/components/WeatherSection";
-import { BvgPlaceholder, BvgSection } from "@/components/BvgSection";
-import { PvPlaceholder, PvSection } from "@/components/PvSection";
-import {
-  SmarthomePlaceholder,
-  SmarthomeSection,
-} from "@/components/SmarthomeSection";
+import { BvgSection } from "@/components/BvgSection";
+import { PvSection } from "@/components/PvSection";
+import { SmarthomeSection } from "@/components/SmarthomeSection";
 import { getAuthStatus, isAuthenticated } from "@/lib/auth";
 import { getShellySensors } from "@/lib/shelly";
 import { getWeather } from "@/lib/weather";
-import { getBvgDepartures } from "@/lib/bvg";
-import { getPvSnapshot } from "@/lib/pv";
-import { getSmarthomeSnapshot } from "@/lib/smarthome";
 
 async function SensorsBlock() {
   await connection();
@@ -46,42 +43,13 @@ async function WeatherBlock() {
   return <WeatherSection initialData={initialData} />;
 }
 
-async function BvgBlock() {
-  await connection();
-  let initialData;
-  try {
-    initialData = await getBvgDepartures();
-  } catch {
-    initialData = undefined;
-  }
-  return <BvgSection initialData={initialData} />;
-}
-
-async function PvBlock() {
-  await connection();
-  let initialData;
-  try {
-    initialData = await getPvSnapshot();
-  } catch {
-    initialData = undefined;
-  }
-  return <PvSection initialData={initialData} />;
-}
-
-async function SmarthomeBlock() {
-  await connection();
-  let initialData;
-  try {
-    initialData = await getSmarthomeSnapshot();
-  } catch {
-    initialData = undefined;
-  }
-  return <SmarthomeSection initialData={initialData} />;
-}
-
 /**
  * Session cookie read must stay behind <Suspense> when Cache Components
  * is enabled — otherwise `next build` fails with blocking-prerender-dynamic.
+ *
+ * Tab bodies are children of the client tab shell (not props) so Suspense can
+ * stream. Only the home tab is SSR-fetched; BVG / PV / Smarthome load on the
+ * client after paint so slow Shelly cover polls cannot block first paint.
  */
 async function AuthGatedHome() {
   const authenticated = await isAuthenticated();
@@ -92,8 +60,8 @@ async function AuthGatedHome() {
       <Header initialAuth={initialAuth} />
 
       {authenticated ? (
-        <DashboardTabs
-          home={
+        <DashboardTabs>
+          <DashboardTabPanel id="home">
             <div className="flex flex-col gap-8">
               <Suspense fallback={<SensorsPlaceholder />}>
                 <SensorsBlock />
@@ -103,23 +71,20 @@ async function AuthGatedHome() {
                 <WeatherBlock />
               </Suspense>
             </div>
-          }
-          bvg={
-            <Suspense fallback={<BvgPlaceholder />}>
-              <BvgBlock />
-            </Suspense>
-          }
-          pv={
-            <Suspense fallback={<PvPlaceholder />}>
-              <PvBlock />
-            </Suspense>
-          }
-          smarthome={
-            <Suspense fallback={<SmarthomePlaceholder />}>
-              <SmarthomeBlock />
-            </Suspense>
-          }
-        />
+          </DashboardTabPanel>
+
+          <DashboardTabPanel id="bvg">
+            <BvgSection />
+          </DashboardTabPanel>
+
+          <DashboardTabPanel id="smarthome">
+            <SmarthomeSection />
+          </DashboardTabPanel>
+
+          <DashboardTabPanel id="pv">
+            <PvSection />
+          </DashboardTabPanel>
+        </DashboardTabs>
       ) : (
         <LockedPanel />
       )}

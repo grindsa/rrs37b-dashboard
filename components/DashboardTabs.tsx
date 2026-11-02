@@ -1,36 +1,33 @@
 "use client";
 
-import { useId, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useId,
+  useState,
+  type ReactNode,
+} from "react";
 
 export type DashboardTabId = "home" | "bvg" | "pv" | "smarthome";
 
 const TABS: { id: DashboardTabId; label: string }[] = [
   { id: "home", label: "Sensoren & Wetter" },
   { id: "bvg", label: "BVG" },
-  { id: "pv", label: "Photovoltaik" },
   { id: "smarthome", label: "Smarthome" },
+  { id: "pv", label: "PV" },
 ];
 
-export function DashboardTabs({
-  home,
-  bvg,
-  pv,
-  smarthome,
-}: {
-  home: ReactNode;
-  bvg: ReactNode;
-  pv: ReactNode;
-  smarthome: ReactNode;
-}) {
+const ActiveTabContext = createContext<DashboardTabId>("home");
+const TabBaseIdContext = createContext("");
+
+/**
+ * Tab chrome renders immediately. Panel bodies are `children`
+ * (`DashboardTabPanel`) so Suspense inside them can stream without
+ * blocking sibling tabs or the shell (avoid Server Components as props).
+ */
+export function DashboardTabs({ children }: { children: ReactNode }) {
   const baseId = useId();
   const [active, setActive] = useState<DashboardTabId>("home");
-
-  const panels: Record<DashboardTabId, ReactNode> = {
-    home,
-    bvg,
-    pv,
-    smarthome,
-  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -66,21 +63,35 @@ export function DashboardTabs({
         </div>
       </div>
 
-      {TABS.map((tab) => {
-        const selected = active === tab.id;
-        return (
-          <div
-            key={tab.id}
-            role="tabpanel"
-            id={`${baseId}-panel-${tab.id}`}
-            aria-labelledby={`${baseId}-tab-${tab.id}`}
-            hidden={!selected}
-            className={selected ? "animate-fade-up" : undefined}
-          >
-            {panels[tab.id]}
-          </div>
-        );
-      })}
+      <ActiveTabContext.Provider value={active}>
+        <TabBaseIdContext.Provider value={baseId}>
+          {children}
+        </TabBaseIdContext.Provider>
+      </ActiveTabContext.Provider>
+    </div>
+  );
+}
+
+export function DashboardTabPanel({
+  id,
+  children,
+}: {
+  id: DashboardTabId;
+  children: ReactNode;
+}) {
+  const active = useContext(ActiveTabContext);
+  const baseId = useContext(TabBaseIdContext);
+  const selected = active === id;
+
+  return (
+    <div
+      role="tabpanel"
+      id={`${baseId}-panel-${id}`}
+      aria-labelledby={`${baseId}-tab-${id}`}
+      hidden={!selected}
+      className={selected ? "animate-fade-up" : undefined}
+    >
+      {children}
     </div>
   );
 }
