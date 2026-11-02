@@ -13,11 +13,16 @@ import {
 } from "@/components/WeatherSection";
 import { BvgPlaceholder, BvgSection } from "@/components/BvgSection";
 import { PvPlaceholder, PvSection } from "@/components/PvSection";
+import {
+  SmarthomePlaceholder,
+  SmarthomeSection,
+} from "@/components/SmarthomeSection";
 import { getAuthStatus, isAuthenticated } from "@/lib/auth";
 import { getShellySensors } from "@/lib/shelly";
 import { getWeather } from "@/lib/weather";
 import { getBvgDepartures } from "@/lib/bvg";
 import { getPvSnapshot } from "@/lib/pv";
+import { getSmarthomeSnapshot } from "@/lib/smarthome";
 
 async function SensorsBlock() {
   await connection();
@@ -63,6 +68,17 @@ async function PvBlock() {
   return <PvSection initialData={initialData} />;
 }
 
+async function SmarthomeBlock() {
+  await connection();
+  let initialData;
+  try {
+    initialData = await getSmarthomeSnapshot();
+  } catch {
+    initialData = undefined;
+  }
+  return <SmarthomeSection initialData={initialData} />;
+}
+
 /**
  * Session cookie read must stay behind <Suspense> when Cache Components
  * is enabled — otherwise `next build` fails with blocking-prerender-dynamic.
@@ -98,6 +114,11 @@ async function AuthGatedHome() {
               <PvBlock />
             </Suspense>
           }
+          smarthome={
+            <Suspense fallback={<SmarthomePlaceholder />}>
+              <SmarthomeBlock />
+            </Suspense>
+          }
         />
       ) : (
         <LockedPanel />
@@ -124,7 +145,7 @@ export default function Home() {
         </Suspense>
 
         <p className="pb-2 pt-2 text-center text-[0.7rem] tracking-wide text-muted">
-          RRS37 · Shelly LAN · Open-Meteo · BVG · PV
+          RRS37 · Shelly LAN · Open-Meteo · BVG · PV · Smarthome
         </p>
       </main>
     </div>

@@ -16,6 +16,10 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOSTNAME=0.0.0.0
+      # Live inventory on the host; example ships in the image as fallback.
+      - SMARTHOME_CONFIG_FILE=/app/config/smarthome.yml
+    volumes:
+      - ./config:/app/config:ro
     networks:
       - proxy
       - pv

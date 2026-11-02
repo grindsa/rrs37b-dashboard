@@ -1,0 +1,49 @@
+# Smarthome layout — copy to config/smarthome.yml and set real LAN IPs.
+# RPC password stays in .env (SHELLY_RPC_PASSWORD).
+#
+#   cp config/smarthome.example.yml config/smarthome.yml
+#
+# Optional override path: SMARTHOME_CONFIG_FILE=/absolute/or/relative/path.yml
+
+groups:
+  - id: dg
+    name: Dachgeschoss
+    covers:
+      - id: dg-ost
+        name: DG Ost
+        ip: 192.168.0.101
+        coverId: 0
+      - id: dg-west
+        name: DG West
+        ip: 192.168.0.102
+        coverId: 0
+
+  - id: og1
+    name: 1. OG
+    covers:
+      - id: og1-nord
+        name: 1.OG Nord
+        ip: 192.168.0.111
+        coverId: 0
+      - id: og1-sued
+        name: 1.OG Süd
+        ip: 192.168.0.112
+        coverId: 0
+
+  - id: eg
+    name: Erdgeschoss
+    covers:
+      - id: eg-terrasse
+        name: EG Terrasse
+        ip: 192.168.0.121
+        coverId: 0
+      - id: eg-strasse
+        name: EG Straße
+        ip: 192.168.0.122
+        coverId: 0
+
+plugs:
+  - id: plug-1
+    name: Shelly Plug S
+    ip: 192.168.0.130
+    switchId: 0

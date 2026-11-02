@@ -1,6 +1,6 @@
 # RRS37-Dashboard
 
-Local infoboard for **Romain-Rolland-Straße 37B, Berlin** — Shelly BLU H&T sensors, Open-Meteo weather, live BVG departures, and Photovoltaik (battery SoC, solar W, house W).
+Local infoboard for **Romain-Rolland-Straße 37B, Berlin** — Shelly BLU H&T sensors, Open-Meteo weather, live BVG departures, Photovoltaik (battery SoC, solar W, house W), and Smarthome (Cover / Plug S).
 
 Public site: `https://rrs37b.mewes-im-netz.de`
 
@@ -90,7 +90,8 @@ See `.env.example`. Never commit `.env` (repo is public).
 | Variable | Purpose |
 |----------|---------|
 | `SHELLY_PLUG_*` | LAN IPs of Plug S Gen3 BLE gateways |
-| `SHELLY_RPC_PASSWORD` | RPC auth (shared by plugs + Pro 3EM when enabled) |
+| `SHELLY_RPC_PASSWORD` | RPC auth (shared by BLE plugs, Pro 3EM, covers, Plug S) |
+| `SMARTHOME_CONFIG_FILE` | Optional path to Smarthome YAML (default `config/smarthome.yml`) |
 | `OPEN_METEO_LAT` / `LON` | Fixed coords for 37B (`52.565379` / `13.441779`) |
 | `BVG_STOP_*` | Stop IDs/labels; 1+2 = default two-column Zuhause, 3+ = picker options |
 | `SHELLY_PRO_3EM_HOST` | Pro 3EM LAN IP — house consumption (`total_act_power`) |
@@ -105,6 +106,8 @@ app/                 # UI + route handlers
 components/
 lib/
   shelly.ts          # LAN RPC → BLU sensors
+  smarthome.ts       # Cover / Plug S status + control
+  smarthome-config.ts
   pv.ts              # Photovoltaik orchestrator
   pv-shelly-em.ts    # Pro 3EM house W
   pv-ez1.ts          # EZ1-M solar W
@@ -112,6 +115,8 @@ lib/
   weather.ts         # Open-Meteo
   bvg.ts             # transport.rest
   cache.ts           # in-memory TTL
+config/
+  smarthome.example.yml
 deploy/
   mosquitto/         # broker config for profile `noah`
 Dockerfile
@@ -213,6 +218,64 @@ Pin a single device if you have several:
 NOAH_MQTT_TOPIC=noah2mqtt/0ABC00AA15AA00AA
 ```
 
+## Smarthome
+
+Tab **Smarthome** (session required, same unlock as the rest of the dashboard):
+
+- Roller shutters (Shelly 2PM Cover) grouped by floor — ↑ / ↓ controls (active direction becomes pause/stop while moving)
+- One or more Shelly Plug S toggles
+
+All Shelly traffic is server-side (`lib/smarthome.ts` → `shellyRpc`). The browser never sees device IPs in control requests — only config ids (`groupId` / `coverId` / `plugId`).
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/smarthome` | Status (short TTL cache, ~8s) |
+| `POST /api/smarthome/group` | `{ groupId, action: open\|stop\|close }` — parallel per cover; partial failures → HTTP 207 |
+| `POST /api/smarthome/cover` | `{ coverId, action: open\|stop\|close }` |
+| `POST /api/smarthome/plug` | `{ plugId, on: boolean }` |
+
+Control commands always hit devices live and invalidate the status cache. Without a valid session, `proxy.ts` returns 401 on these routes (same as sensors/PV).
+
+### Config (YAML file)
+
+Device layout lives in YAML (not `.env`). RPC password stays in `.env` as `SHELLY_RPC_PASSWORD`.
+
+```bash
+cp config/smarthome.example.yml config/smarthome.yml
+$EDITOR config/smarthome.yml
+```
+
+`config/smarthome.yml` is gitignored. Schema (see the example file for comments):
+
+```yaml
+groups:
+  - id: dg
+    name: Dachgeschoss
+    covers:
+      - id: dg-ost
+        name: DG Ost
+        ip: 192.168.x.x
+        coverId: 0
+plugs:
+  - id: plug-1
+    name: Shelly Plug S
+    ip: 192.168.x.x
+    switchId: 0
+```
+
+- `id` values must be unique across groups, covers, and plugs.
+- `coverId` / `switchId` default to `0` when omitted.
+- Optional path override: `SMARTHOME_CONFIG_FILE` (Compose sets `/app/config/smarthome.yml`).
+- If the live file is missing, the tab shows `config/smarthome.example.yml` (no LAN probes; control disabled).
+
+Docker mounts `./config` into the container. After editing on the server:
+
+```bash
+./deploy.sh
+```
+
+Phase 2 (later): target %-position via `Cover.GoToPosition`.
+
 ## Roadmap
 
 1. ~~Scaffold~~
@@ -222,3 +285,4 @@ NOAH_MQTT_TOPIC=noah2mqtt/0ABC00AA15AA00AA
 5. ~~RPC password, offline states, polish~~
 6. ~~Photovoltaik tab + Pro 3EM / EZ1-M / noah-mqtt adapters~~
 7. Deploy to `rrs37b.mewes-im-netz.de`
+8. ~~Smarthome tab (Cover groups + Plug S)~~ — %-position later

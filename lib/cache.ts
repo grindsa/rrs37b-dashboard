@@ -46,4 +46,6 @@ export const CACHE_TTL = {
   bvg: 45_000,
   weather: 12 * 60_000,
   pv: 30_000,
+  /** Cover/plug status; control POSTs always bypass / invalidate. */
+  smarthome: 8_000,
 } as const;

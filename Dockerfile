@@ -37,6 +37,8 @@ COPY --from=builder --chown=node:node /app/public ./public
 RUN mkdir .next && chown node:node .next
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+# Example Smarthome YAML (live file is bind-mounted via compose).
+COPY --from=builder --chown=node:node /app/config ./config
 
 USER node
 EXPOSE 3000

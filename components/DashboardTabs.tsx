@@ -2,22 +2,25 @@
 
 import { useId, useState, type ReactNode } from "react";
 
-export type DashboardTabId = "home" | "bvg" | "pv";
+export type DashboardTabId = "home" | "bvg" | "pv" | "smarthome";
 
 const TABS: { id: DashboardTabId; label: string }[] = [
   { id: "home", label: "Sensoren & Wetter" },
   { id: "bvg", label: "BVG" },
   { id: "pv", label: "Photovoltaik" },
+  { id: "smarthome", label: "Smarthome" },
 ];
 
 export function DashboardTabs({
   home,
   bvg,
   pv,
+  smarthome,
 }: {
   home: ReactNode;
   bvg: ReactNode;
   pv: ReactNode;
+  smarthome: ReactNode;
 }) {
   const baseId = useId();
   const [active, setActive] = useState<DashboardTabId>("home");
@@ -26,6 +29,7 @@ export function DashboardTabs({
     home,
     bvg,
     pv,
+    smarthome,
   };
 
   return (
@@ -49,7 +53,7 @@ export function DashboardTabs({
                 tabIndex={selected ? 0 : -1}
                 onClick={() => setActive(tab.id)}
                 className={[
-                  "flex-1 rounded-md px-2 py-2 transition-colors duration-200 sm:px-3",
+                  "flex-1 rounded-md px-1.5 py-2 transition-colors duration-200 sm:px-3",
                   selected
                     ? "bg-accent text-on-accent"
                     : "text-muted hover:text-foreground",
