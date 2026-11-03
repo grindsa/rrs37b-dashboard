@@ -45,6 +45,8 @@ Build runs **on the webserver** (no image registry). The app joins the existing 
    - Caddy: `docs/Caddyfile.example`
    - nginx: `docs/nginx.example.conf`
 
+   The app sends CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy` and `Permissions-Policy` itself (`next.config.ts`); the proxy only adds HSTS. The containers run with a read-only root filesystem (except noah-mqtt), no capabilities, `no-new-privileges` and memory limits (`docker-compose.yml`).
+
 4. Point DNS A/AAAA for `rrs37b.mewes-im-netz.de` at the server.
 
 ### Every deploy

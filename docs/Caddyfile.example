@@ -1,5 +1,8 @@
 # Snippet for the host reverse-proxy stack (network `proxy`).
 # Copy into the proxy Caddyfile and set env overrides as needed.
+#
+# CSP, X-Frame-Options, nosniff, Referrer-Policy and Permissions-Policy are
+# set by the app itself (next.config.ts), so only HSTS lives here.
 
 {$RRS37_HOST:rrs37b.mewes-im-netz.de} {
 	encode zstd gzip
@@ -12,9 +15,8 @@
 	}
 
 	header {
-		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "strict-origin-when-cross-origin"
+		# No `preload`: it only applies to apex domains.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
 	}
 }

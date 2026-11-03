@@ -20,6 +20,15 @@ services:
       - SMARTHOME_CONFIG_FILE=/app/config/smarthome.yml
     volumes:
       - ./config:/app/config:ro
+    # The app never writes to disk; Next.js may use .next/cache at runtime.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    pids_limit: 256
     networks:
       - proxy
       - pv
@@ -36,6 +45,14 @@ services:
     restart: unless-stopped
     volumes:
       - ./deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    # Started directly as the image's mosquitto user, so it needs no
+    # capabilities to drop privileges; persistence is off, logs go to stdout.
+    user: "1883:1883"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 64m
+    pids_limit: 64
     networks:
       - pv
     # LAN-only; not published on the host by default.
@@ -58,6 +75,11 @@ services:
       MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-noah2mqtt}
       POLLING_INTERVAL: ${NOAH_POLLING_INTERVAL:-30}
       LOG_LEVEL: ${NOAH_LOG_LEVEL:-INFO}
+    # Not read_only: it is unclear whether the bridge caches Growatt sessions on disk.
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 128m
+    pids_limit: 64
     depends_on:
       - mosquitto
     networks:
