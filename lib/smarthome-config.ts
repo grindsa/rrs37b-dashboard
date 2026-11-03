@@ -107,6 +107,8 @@ const ERR_PREFIX = "Smarthome-Config";
 
 const DEFAULT_CONFIG_FILE = "config/smarthome.yml";
 const EXAMPLE_CONFIG_FILE = "config/smarthome.example.yml";
+/** Image-baked fallback outside the Compose `./config` bind mount. */
+const EXAMPLE_CONFIG_FILE_BUNDLED = "smarthome.example.yml";
 
 const IPV4_RE =
   /^(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)$/;
@@ -558,7 +560,9 @@ export function getSmarthomeConfigFilePath(): string {
 }
 
 export function getSmarthomeExampleConfigFilePath(): string {
-  return resolveConfigPath(EXAMPLE_CONFIG_FILE);
+  const underConfig = resolveConfigPath(EXAMPLE_CONFIG_FILE);
+  if (existsSync(underConfig)) return underConfig;
+  return resolveConfigPath(EXAMPLE_CONFIG_FILE_BUNDLED);
 }
 
 /** Parsed files keyed by path; re-read only when mtime or size changes. */

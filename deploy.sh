@@ -19,6 +19,24 @@ if [[ ! -f .env ]]; then
   exit 1
 fi
 
+# Live inventory is bind-mounted; without it the UI has no devices.
+# Ensure the directory is traversable by the container user (node, uid 1000).
+mkdir -p config
+chmod 755 config || true
+if [[ ! -f config/smarthome.yml ]]; then
+  cat >&2 <<'MSG'
+ERROR: missing config/smarthome.yml (gitignored — not restored by git pull).
+Restore it from backup, or:
+  cp config/smarthome.example.yml config/smarthome.yml
+  $EDITOR config/smarthome.yml
+Then: chown "$(id -u)":1000 config/smarthome.yml && chmod 640 config/smarthome.yml
+MSG
+  exit 1
+fi
+# Container runs as uid 1000; group-read is enough if the dir is world-executable.
+chown "$(id -u)":1000 config/smarthome.yml 2>/dev/null || true
+chmod 640 config/smarthome.yml || true
+
 BRANCH="${DEPLOY_BRANCH:-main}"
 
 # Git refuses operations when the tree is owned by another user (common for
@@ -56,6 +74,9 @@ fi
 if [[ -n "${COMPOSE_PROFILES}" ]]; then
   export COMPOSE_PROFILES
   echo "==> Compose profiles: ${COMPOSE_PROFILES}"
+elif [[ ! -f .env.noah ]]; then
+  echo "Note: no .env.noah — Mosquitto/noah-mqtt will not start (NOAH SoC unavailable)." >&2
+  echo "      Restore .env.noah from backup or copy .env.noah.example." >&2
 fi
 
 # Value of the last KEY= line in an env file (quotes and " # comment" stripped).

@@ -36,8 +36,10 @@ COPY --from=builder --chown=node:node /app/public ./public
 RUN mkdir .next && chown node:node .next
 COPY --from=builder --chown=node:node /app/.next/standalone ./
 COPY --from=builder --chown=node:node /app/.next/static ./.next/static
-# Example Smarthome YAML (live file is bind-mounted via compose).
+# Example Smarthome YAML. Compose bind-mounts ./config over /app/config, so keep
+# a copy outside that mount for the in-image fallback when the live file is absent.
 COPY --from=builder --chown=node:node /app/config ./config
+COPY --from=builder --chown=node:node /app/config/smarthome.example.yml /app/smarthome.example.yml
 
 USER node
 EXPOSE 3000
