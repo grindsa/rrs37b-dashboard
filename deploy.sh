@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-EXPECTED_ROOT="/srv/stacks/rrs37-dashboard"
+EXPECTED_ROOT="/srv/stacks/rrs37b-dashboard"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 

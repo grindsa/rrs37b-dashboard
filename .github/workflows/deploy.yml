@@ -44,7 +44,7 @@ jobs:
           capture_stdout: true
           # Ignored once the server pins this key to deploy.sh via a forced
           # command in authorized_keys; kept so deploys work before that.
-          script: /srv/stacks/rrs37-dashboard/deploy.sh
+          script: /srv/stacks/rrs37b-dashboard/deploy.sh
 
       # Defense in depth: if appleboy/drone-ssh ever reports success after a
       # partial remote failure, missing this marker still fails the job.
