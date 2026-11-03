@@ -309,6 +309,3 @@ meters:
 Since the file can hold passwords, restrict it on the server to the deploy user and the container user (`node`, UID 1000), e.g. `chown <deploy-user>:1000 config/smarthome.yml && chmod 640 config/smarthome.yml`.
 
 Docker mounts `./config` into the container; edits are picked up on the next request without a redeploy.
-
-Phase 2 (later): target %-position via `Cover.GoToPosition`.
-
