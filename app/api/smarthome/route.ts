@@ -17,6 +17,7 @@ export const GET = withAuth(async function GET() {
     return NextResponse.json(
       {
         groups: [],
+        lightGroups: [],
         plugs: [],
         fetchedAt: new Date().toISOString(),
         anyMoving: false,

@@ -1,8 +1,10 @@
 /**
- * Smarthome device inventory from a YAML file: cover groups, covers, plugs
- * (Shelly or Tapo), BLU sensors (via Shelly gateway plugs) and energy meters.
+ * Smarthome device inventory from a YAML file: typed groups (covers | lights),
+ * covers, lamps (LEDVANCE/Tuya), plugs (Shelly or Tapo), BLU sensors (via Shelly
+ * gateway plugs) and energy meters.
  * Shelly devices without `password` use SHELLY_RPC_PASSWORD from env.
  * Tapo plugs use TAPO_EMAIL / TAPO_PASSWORD from env (local KLAP).
+ * Lamp `local_key` values are server secrets — never expose to the client.
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -11,6 +13,9 @@ import { parse as parseYaml } from "yaml";
 
 export const SENSOR_LABELS = ["Aussen", "Arbeitszimmer", "Wohnzimmer"] as const;
 export type SensorLabel = (typeof SENSOR_LABELS)[number];
+
+export const GROUP_TYPES = ["covers", "lights"] as const;
+export type GroupType = (typeof GROUP_TYPES)[number];
 
 export type SmarthomeCoverConfig = {
   id: string;
@@ -22,11 +27,34 @@ export type SmarthomeCoverConfig = {
   password?: string;
 };
 
+export type SmarthomeLampConfig = {
+  id: string;
+  name: string;
+  ip: string;
+  /** Tuya device id. */
+  deviceId: string;
+  /** Tuya local key — server secret only. */
+  localKey: string;
+  groupId: string;
+  /** Full-on brightness target (default 100). */
+  onPercent: number;
+  /**
+   * Dim cycle brightness (1–100). Omit to skip dim for this lamp:
+   * group/lamp "dim" turns it off instead.
+   */
+  dimPercent?: number;
+  /** Tuya local protocol version (default "3.5"). */
+  protocol: string;
+};
+
 export type SmarthomeGroupConfig = {
   id: string;
   name: string;
-  /** Covers referencing this group, in file order. */
+  type: GroupType;
+  /** Covers when type is covers (file order); empty for light groups. */
   covers: SmarthomeCoverConfig[];
+  /** Lamps when type is lights (file order); empty for cover groups. */
+  lamps: SmarthomeLampConfig[];
 };
 
 export const PLUG_VENDORS = ["shelly", "tapo"] as const;
@@ -92,6 +120,37 @@ function emptyConfig(): SmarthomeConfig {
     meters: [],
     passwordsByIp: new Map(),
   };
+}
+
+function asPercent(value: unknown, pathLabel: string): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 1 || n > 100) {
+    throw new Error(`${ERR_PREFIX}: ${pathLabel} must be an integer 1–100`);
+  }
+  return Math.round(n);
+}
+
+function asOptionalOnPercent(value: unknown, pathLabel: string): number {
+  if (value === undefined || value === null || value === "") return 100;
+  return asPercent(value, pathLabel);
+}
+
+function asOptionalDimPercent(
+  value: unknown,
+  pathLabel: string,
+): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  return asPercent(value, pathLabel);
+}
+
+function asGroupType(value: unknown, pathLabel: string): GroupType {
+  const type = asString(value, pathLabel).toLowerCase();
+  if ((GROUP_TYPES as readonly string[]).includes(type)) {
+    return type as GroupType;
+  }
+  throw new Error(
+    `${ERR_PREFIX}: ${pathLabel} must be one of ${GROUP_TYPES.join(", ")}`,
+  );
 }
 
 function asRecord(value: unknown, pathLabel: string): Record<string, unknown> {
@@ -193,27 +252,34 @@ function assertUnique(ids: string[], kind: string): void {
 
 function parseGroup(raw: unknown, pathLabel: string) {
   const obj = asRecord(raw, pathLabel);
-  if ("covers" in obj) {
+  if ("covers" in obj || "lamps" in obj) {
     throw new Error(
-      `${ERR_PREFIX}: ${pathLabel}.covers is no longer supported — list covers at the top level with \`group: <id>\``,
+      `${ERR_PREFIX}: ${pathLabel} must not nest covers/lamps — list them at the top level with \`group: <id>\``,
     );
   }
   return {
     id: asString(obj.id, `${pathLabel}.id`),
     name: asString(obj.name, `${pathLabel}.name`),
+    type: asGroupType(obj.type, `${pathLabel}.type`),
   };
 }
 
 function parseCover(
   raw: unknown,
   pathLabel: string,
-  groupIds: Set<string>,
+  groupsById: Map<string, { type: GroupType }>,
 ): SmarthomeCoverConfig {
   const obj = asRecord(raw, pathLabel);
   const groupId = asString(obj.group, `${pathLabel}.group`);
-  if (!groupIds.has(groupId)) {
+  const group = groupsById.get(groupId);
+  if (!group) {
     throw new Error(
       `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" is not defined under groups`,
+    );
+  }
+  if (group.type !== "covers") {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" has type ${group.type} — covers require type: covers`,
     );
   }
   return {
@@ -223,6 +289,46 @@ function parseCover(
     coverId: asComponentId(obj.coverId, `${pathLabel}.coverId`),
     groupId,
     password: asOptionalPassword(obj.password, `${pathLabel}.password`),
+  };
+}
+
+function parseLamp(
+  raw: unknown,
+  pathLabel: string,
+  groupsById: Map<string, { type: GroupType }>,
+): SmarthomeLampConfig {
+  const obj = asRecord(raw, pathLabel);
+  const groupId = asString(obj.group, `${pathLabel}.group`);
+  const group = groupsById.get(groupId);
+  if (!group) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" is not defined under groups`,
+    );
+  }
+  if (group.type !== "lights") {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" has type ${group.type} — lamps require type: lights`,
+    );
+  }
+  const protocolRaw = obj.protocol;
+  const protocol =
+    protocolRaw === undefined || protocolRaw === null || protocolRaw === ""
+      ? "3.5"
+      : asString(protocolRaw, `${pathLabel}.protocol`);
+
+  return {
+    id: asString(obj.id, `${pathLabel}.id`),
+    name: asString(obj.name, `${pathLabel}.name`),
+    ip: asIp(obj.ip, `${pathLabel}.ip`),
+    deviceId: asString(obj.device_id ?? obj.deviceId, `${pathLabel}.device_id`),
+    localKey: asString(obj.local_key ?? obj.localKey, `${pathLabel}.local_key`),
+    groupId,
+    onPercent: asOptionalOnPercent(obj.on_percent ?? obj.onPercent, `${pathLabel}.on_percent`),
+    dimPercent: asOptionalDimPercent(
+      obj.dim_percent ?? obj.dimPercent,
+      `${pathLabel}.dim_percent`,
+    ),
+    protocol,
   };
 }
 
@@ -323,12 +429,17 @@ function parseConfig(parsed: unknown): ParseResult {
 
   const groupDefs = root.groups.map((g, i) => parseGroup(g, `groups[${i}]`));
   assertUnique(groupDefs.map((g) => g.id), "group id");
-  const groupIds = new Set(groupDefs.map((g) => g.id));
+  const groupsById = new Map(groupDefs.map((g) => [g.id, g]));
 
   const covers = asArray(root.covers, "covers").map((c, i) =>
-    parseCover(c, `covers[${i}]`, groupIds),
+    parseCover(c, `covers[${i}]`, groupsById),
   );
   assertUnique(covers.map((c) => c.id), "cover id");
+
+  const lamps = asArray(root.lamps, "lamps").map((l, i) =>
+    parseLamp(l, `lamps[${i}]`, groupsById),
+  );
+  assertUnique(lamps.map((l) => l.id), "lamp id");
 
   const plugs = asArray(root.plugs, "plugs").map((p, i) =>
     parsePlug(p, `plugs[${i}]`),
@@ -356,12 +467,22 @@ function parseConfig(parsed: unknown): ParseResult {
   const notes: string[] = [];
   const groups: SmarthomeGroupConfig[] = [];
   for (const def of groupDefs) {
-    const groupCovers = covers.filter((c) => c.groupId === def.id);
-    if (groupCovers.length === 0) {
-      notes.push(`group "${def.id}" has no covers and is not shown`);
+    if (def.type === "covers") {
+      const groupCovers = covers.filter((c) => c.groupId === def.id);
+      if (groupCovers.length === 0) {
+        notes.push(`group "${def.id}" (covers) has no covers and is not shown`);
+        continue;
+      }
+      groups.push({ ...def, covers: groupCovers, lamps: [] });
       continue;
     }
-    groups.push({ ...def, covers: groupCovers });
+
+    const groupLamps = lamps.filter((l) => l.groupId === def.id);
+    if (groupLamps.length === 0) {
+      notes.push(`group "${def.id}" (lights) has no lamps and is not shown`);
+      continue;
+    }
+    groups.push({ ...def, covers: [], lamps: groupLamps });
   }
 
   for (const plug of plugs) {
@@ -564,8 +685,19 @@ export function findCover(
   config: SmarthomeConfig,
   coverId: string,
 ): SmarthomeCoverConfig | undefined {
-  for (const group of config.groups) {
+  for (const group of coverGroups(config)) {
     const hit = group.covers.find((c) => c.id === coverId);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+export function findLamp(
+  config: SmarthomeConfig,
+  lampId: string,
+): SmarthomeLampConfig | undefined {
+  for (const group of lightGroups(config)) {
+    const hit = group.lamps.find((l) => l.id === lampId);
     if (hit) return hit;
   }
   return undefined;
@@ -576,6 +708,30 @@ export function findGroup(
   groupId: string,
 ): SmarthomeGroupConfig | undefined {
   return config.groups.find((g) => g.id === groupId);
+}
+
+export function findCoverGroup(
+  config: SmarthomeConfig,
+  groupId: string,
+): SmarthomeGroupConfig | undefined {
+  const group = findGroup(config, groupId);
+  return group?.type === "covers" ? group : undefined;
+}
+
+export function findLightGroup(
+  config: SmarthomeConfig,
+  groupId: string,
+): SmarthomeGroupConfig | undefined {
+  const group = findGroup(config, groupId);
+  return group?.type === "lights" ? group : undefined;
+}
+
+export function coverGroups(config: SmarthomeConfig): SmarthomeGroupConfig[] {
+  return config.groups.filter((g) => g.type === "covers");
+}
+
+export function lightGroups(config: SmarthomeConfig): SmarthomeGroupConfig[] {
+  return config.groups.filter((g) => g.type === "lights");
 }
 
 /** Visible plugs only; hidden plugs are not switchable. */

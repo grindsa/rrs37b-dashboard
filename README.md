@@ -1,6 +1,6 @@
 # RRS37-Dashboard
 
-Local infoboard for *My Home** — Shelly BLU H&T sensors, Open-Meteo weather, live Public train departures, Photovoltaik (battery SoC, solar W, house W), and Smarthome (Cover / Plug S).
+Local infoboard for *My Home** — Shelly BLU H&T sensors, Open-Meteo weather, live Public train departures, Photovoltaik (battery SoC, solar W, house W), and Smarthome (covers, LEDVANCE lamps, plugs).
 
 ## Stack
 
@@ -110,8 +110,10 @@ app/                 # UI + route handlers
 components/
 lib/
   shelly.ts          # LAN RPC → BLU sensors
-  smarthome.ts       # Cover / plug status + control
+  smarthome.ts       # Cover / lamp / plug status + control
   smarthome-config.ts
+  light-mode.ts      # Lamp cycle helpers (shared with UI)
+  tuya-light.ts      # LEDVANCE / Tuya local (tuyapi)
   tapo-plug.ts       # Tapo P100 local KLAP (vendor: tapo)
   pv.ts              # Photovoltaik orchestrator
   pv-shelly-em.ts    # Pro 3EM house W
@@ -246,23 +248,28 @@ NOAH_MQTT_TOPIC=noah2mqtt/0ABC00AA15AA00AA
 
 Tab **Smarthome** (session required, same unlock as the rest of the dashboard):
 
-- Roller shutters (Shelly 2PM Cover) grouped by floor — ↑ / ↓ controls (active direction becomes pause/stop while moving)
+- Roller shutters (Shelly 2PM Cover) in `type: covers` groups — ↑ / ↓ controls (active direction becomes pause/stop while moving)
+- LEDVANCE Smart+ WiFi lamps (Tuya local) in `type: lights` groups — one cycle button per lamp/group: **off → on → dim → off** (mixed → on)
 - Plug toggles (Shelly Plug S and/or Tapo P100)
 
-Device traffic is server-side (`lib/smarthome.ts` → Shelly RPC or Tapo KLAP). The browser never sees device IPs in control requests — only config ids (`groupId` / `coverId` / `plugId`).
+Device traffic is server-side (`lib/smarthome.ts` → Shelly RPC, Tapo KLAP, or Tuya/`tuyapi`). The browser never sees device IPs or `local_key` — only config ids (`groupId` / `coverId` / `lampId` / `plugId`).
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/smarthome` | Status (short TTL cache, ~8s) |
-| `POST /api/smarthome/group` | `{ groupId, action: open\|stop\|close }` — parallel per cover; partial failures → HTTP 207 |
+| `GET /api/smarthome` | Status (short TTL cache, ~8s) — `groups` (covers), `lightGroups`, `plugs` |
+| `POST /api/smarthome/group` | `{ groupId, action: open\|stop\|close }` — cover groups; partial failures → HTTP 207 |
 | `POST /api/smarthome/cover` | `{ coverId, action: open\|stop\|close }` |
+| `POST /api/smarthome/light` | `{ lampId }` — cycle one lamp |
+| `POST /api/smarthome/light-group` | `{ groupId }` — cycle all lamps in a light group to the same next mode |
 | `POST /api/smarthome/plug` | `{ plugId, on: boolean }` |
 
 Control commands always hit devices live and invalidate the status cache. Without a valid session, `proxy.ts` returns 401 on these routes (same as sensors/PV).
 
+Keep the LEDVANCE Smart+ app closed while using local control — Tuya devices allow only one TCP session.
+
 ### Config (YAML file)
 
-Devices live in YAML (not `.env`): shutter groups, covers, plugs, the BLE gateways, BLU sensors and the Pro 3EM.
+Devices live in YAML (not `.env`): typed groups, covers, lamps, plugs, BLE gateways, BLU sensors and the Pro 3EM.
 
 ```bash
 cp config/smarthome.example.yml config/smarthome.yml
@@ -275,13 +282,27 @@ $EDITOR config/smarthome.yml
 groups:
   - id: dg
     name: Dachgeschoss
+    type: covers         # required: covers | lights
+  - id: wohn
+    name: Wohnbereich
+    type: lights
 covers:
   - id: dg-ost
     name: DG Ost
     ip: 192.168.x.x
     coverId: 0
-    group: dg            # required, must match a group id
+    group: dg            # must reference type: covers
     password: "…"        # optional, else SHELLY_RPC_PASSWORD
+lamps:
+  - id: stehlampe
+    name: Stehlampe
+    ip: 192.168.x.x
+    device_id: "bf…"     # Tuya device id
+    local_key: "…"       # Tuya local key (server secret)
+    group: wohn          # must reference type: lights
+    on_percent: 100      # optional, default 100
+    dim_percent: 70      # optional — omit to turn off on group/lamp dim
+    # protocol: "3.5"    # optional, default 3.5
 plugs:
   - id: plug-1
     name: Shelly Plug S
@@ -306,13 +327,20 @@ meters:
 ```
 
 - `id` values must be unique within each list; sensor labels must be unique.
+- Every group needs `type: covers` or `type: lights`. Do not nest devices under groups — use top-level `covers` / `lamps` with `group: <id>`.
+- Cover `group` must point at a covers group; lamp `group` at a lights group.
 - `coverId` / `switchId` / `emId` default to `0` when omitted.
+- Lamp cycle maps modes to Tuya DPs `20` (on/off) and `22` (brightness 10–1000). On uses `on_percent` (default 100). Dim uses each lamp’s `dim_percent`; if omitted, that lamp turns **off** on dim (useful in mixed groups). A single lamp without `dim_percent` cycles off → on → off.
 - Plug `vendor` is `shelly` (default) or `tapo`. Sensor `gateway` plugs must be Shelly (Tapo as gateway is a config error).
 - `password` is optional on Shelly covers, plugs and meters. Without it, `SHELLY_RPC_PASSWORD` is used; the server log lists which devices still fall back. Entries sharing an IP must not have different passwords. Do not set `password` on Tapo plugs.
-- Groups without covers are not shown. Unknown `group` or `gateway` references are config errors.
+- Empty groups (no matching covers/lamps) are not shown. Unknown `group` or `gateway` references are config errors.
 - Optional path override: `SMARTHOME_CONFIG_FILE` (Compose sets `/app/config/smarthome.yml`).
 - If the live file is missing, the tab shows `config/smarthome.example.yml` (no LAN probes; control, sensors and Hausverbrauch disabled).
 
-Since the file can hold passwords, restrict it on the server to the deploy user and the container user (`node`, UID 1000), e.g. `chown <deploy-user>:1000 config/smarthome.yml && chmod 640 config/smarthome.yml`.
+#### LEDVANCE / Tuya keys
+
+Pair bulbs in the Smart+ app first, reserve stable DHCP IPs, then export `device_id` + `local_key` (e.g. `npx @tuyapi/cli wizard` with a Tuya IoT project, `python -m tinytuya wizard`, or a Ledvance-oriented key dump such as FlagX `print-local-keys`). Put them only in `config/smarthome.yml` — never commit real `local_key` values. After a re-pair or firmware reset the local key changes and must be updated. Redeploy is not required for YAML edits (bind-mounted `./config`); a rebuild is only needed when app code changes.
+
+Since the file can hold passwords and Tuya keys, restrict it on the server to the deploy user and the container user (`node`, UID 1000), e.g. `chown <deploy-user>:1000 config/smarthome.yml && chmod 640 config/smarthome.yml`.
 
 Docker mounts `./config` into the container; edits are picked up on the next request without a redeploy.

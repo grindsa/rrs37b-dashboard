@@ -4,10 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import type {
   CoverAction,
   CoverDeviceStatus,
+  LampDeviceStatus,
   PlugDeviceStatus,
   SmarthomeGroupStatus,
+  SmarthomeLightGroupStatus,
   SmarthomeSnapshot,
 } from "@/lib/smarthome";
+import {
+  lightGroupSummaryLabel,
+  lightModeStatusLabel,
+  nextLightMode,
+  summarizeLightGroupModes,
+  type LightGroupMode,
+  type LightMode,
+  type LightModeOrUnknown,
+} from "@/lib/light-mode";
 import { isPageHidden, onForeground } from "@/lib/foreground-refresh";
 import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 
@@ -439,6 +450,205 @@ function GroupBlock({
   );
 }
 
+function LightCycleButton({
+  mode,
+  brightnessPct,
+  dimPercent,
+  label,
+  disabled,
+  onCycle,
+}: {
+  mode: LightModeOrUnknown | LightGroupMode;
+  brightnessPct?: number | null;
+  /** Shown on dim badge; falls back to brightnessPct. */
+  dimPercent?: number;
+  label: string;
+  disabled?: boolean;
+  onCycle: () => void;
+}) {
+  const visual: LightMode | "mixed" | "unknown" =
+    mode === "mixed" || mode === "unknown" || mode === "off" || mode === "on" || mode === "dim"
+      ? mode
+      : "unknown";
+
+  const filled = visual === "on";
+  const soft = visual === "dim";
+  const badge =
+    visual === "dim"
+      ? `${dimPercent ?? brightnessPct ?? "?"}%`
+      : visual === "mixed"
+        ? "~"
+        : null;
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        onCycle();
+      }}
+      className={[
+        "relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-accent transition-[box-shadow,opacity,background-color] duration-200 disabled:opacity-45",
+        filled
+          ? "bg-accent text-background ring-2 ring-accent ring-offset-2 ring-offset-background"
+          : soft
+            ? "bg-accent/25 ring-1 ring-accent/50"
+            : "bg-surface",
+      ].join(" ")}
+    >
+      <IconPower className="h-5 w-5" />
+      {badge ? (
+        <span
+          className={[
+            "absolute -bottom-1 -right-1 min-w-[1.15rem] rounded-full px-1 text-[0.65rem] font-semibold leading-4",
+            soft
+              ? "bg-accent text-background"
+              : "bg-surface text-muted ring-1 ring-hairline",
+          ].join(" ")}
+        >
+          {badge}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+function LampRow({
+  lamp,
+  busy,
+  error,
+  onCycle,
+}: {
+  lamp: LampDeviceStatus;
+  busy: boolean;
+  error?: string;
+  onCycle: () => void;
+}) {
+  return (
+    <li className="border-t border-hairline pt-3 first:border-t-0 first:pt-0">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-foreground">{lamp.name}</p>
+          <p
+            className={[
+              "mt-0.5 text-xs",
+              lamp.online ? "text-muted" : "text-warning",
+            ].join(" ")}
+          >
+            {!lamp.online
+              ? lamp.error
+                ? `offline · ${lamp.error}`
+                : "offline"
+              : lightModeStatusLabel(lamp.mode, lamp.brightnessPct)}
+          </p>
+          {error ? <p className="mt-1 text-xs text-warning">{error}</p> : null}
+        </div>
+        <LightCycleButton
+          mode={lamp.mode}
+          brightnessPct={lamp.brightnessPct}
+          dimPercent={lamp.dimPercent ?? undefined}
+          label={`${lamp.name} Modus wechseln`}
+          disabled={busy || (!lamp.online && lamp.mode === "unknown")}
+          onCycle={onCycle}
+        />
+      </div>
+    </li>
+  );
+}
+
+function LightGroupBlock({
+  group,
+  busyIds,
+  actionErrors,
+  onGroupCycle,
+  onLampCycle,
+}: {
+  group: SmarthomeLightGroupStatus;
+  busyIds: Set<string>;
+  actionErrors: Record<string, string>;
+  onGroupCycle: (groupId: string) => void;
+  onLampCycle: (lampId: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const lampCount = group.lamps.length;
+  const groupBusy =
+    busyIds.has(`light-group:${group.id}`) ||
+    group.lamps.some((l) => busyIds.has(`lamp:${l.id}`));
+
+  return (
+    <section aria-labelledby={`smarthome-light-group-${group.id}`}>
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={`smarthome-light-group-lamps-${group.id}`}
+          onClick={() => setExpanded((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <span className="text-xs text-muted" aria-hidden>
+            {expanded ? "▾" : "▸"}
+          </span>
+          <span className="min-w-0">
+            <span
+              id={`smarthome-light-group-${group.id}`}
+              className="block text-base font-semibold tracking-tight"
+            >
+              {group.name}
+            </span>
+            <span className="mt-0.5 block text-xs text-muted">
+              {lightGroupSummaryLabel(lampCount, group.mode)}
+              {expanded ? "" : " · antippen für Details"}
+            </span>
+          </span>
+        </button>
+        <LightCycleButton
+          mode={group.mode}
+          dimPercent={
+            group.mode === "dim"
+              ? (() => {
+                  const dims = group.lamps
+                    .map((l) => l.dimPercent)
+                    .filter((p): p is number => p != null);
+                  if (dims.length === 0) return undefined;
+                  return Math.round(
+                    dims.reduce((s, p) => s + p, 0) / dims.length,
+                  );
+                })()
+              : undefined
+          }
+          label={`${group.name} Modus wechseln`}
+          disabled={groupBusy}
+          onCycle={() => onGroupCycle(group.id)}
+        />
+      </div>
+      {actionErrors[`light-group:${group.id}`] ? (
+        <p className="mt-2 text-xs text-warning">
+          {actionErrors[`light-group:${group.id}`]}
+        </p>
+      ) : null}
+
+      {expanded ? (
+        <ul
+          id={`smarthome-light-group-lamps-${group.id}`}
+          className="mt-4 flex flex-col gap-3"
+        >
+          {group.lamps.map((lamp) => (
+            <LampRow
+              key={lamp.id}
+              lamp={lamp}
+              busy={busyIds.has(`lamp:${lamp.id}`) || groupBusy}
+              error={actionErrors[`lamp:${lamp.id}`]}
+              onCycle={() => onLampCycle(lamp.id)}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 function PlugRow({
   plug,
   busy,
@@ -523,12 +733,85 @@ export function SmarthomeSection({
     Record<string, MotionOverride>
   >({});
   const [plugBusyId, setPlugBusyId] = useState<string | null>(null);
+  const [lightBusyIds, setLightBusyIds] = useState<Set<string>>(() => new Set());
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
   const anyMovingRef = useRef(Boolean(initialData?.anyMoving));
   const coverOverridesRef = useRef(coverMotionOverrides);
   const groupOverridesRef = useRef(groupMotionOverrides);
   coverOverridesRef.current = coverMotionOverrides;
   groupOverridesRef.current = groupMotionOverrides;
+
+  function patchLampMode(
+    data: SmarthomeSnapshot,
+    lampId: string,
+    mode: LightMode,
+  ): SmarthomeSnapshot {
+    return {
+      ...data,
+      lightGroups: data.lightGroups.map((group) => {
+        const lamps = group.lamps.map((lamp) => {
+          if (lamp.id !== lampId) return lamp;
+          const effective: LightMode =
+            mode === "dim" && lamp.dimPercent == null ? "off" : mode;
+          return {
+            ...lamp,
+            mode: effective,
+            brightnessPct:
+              effective === "off"
+                ? 0
+                : effective === "on"
+                  ? lamp.onPercent
+                  : (lamp.dimPercent ?? 0),
+            online: true,
+            error: undefined,
+          };
+        });
+        return {
+          ...group,
+          lamps,
+          mode: summarizeLightGroupModes(
+            lamps.map((l) => ({ mode: l.mode, dimPercent: l.dimPercent })),
+          ),
+        };
+      }),
+    };
+  }
+
+  function patchLightGroupMode(
+    data: SmarthomeSnapshot,
+    groupId: string,
+    mode: LightMode,
+  ): SmarthomeSnapshot {
+    return {
+      ...data,
+      lightGroups: data.lightGroups.map((group) => {
+        if (group.id !== groupId) return group;
+        const lamps = group.lamps.map((lamp) => {
+          const effective: LightMode =
+            mode === "dim" && lamp.dimPercent == null ? "off" : mode;
+          return {
+            ...lamp,
+            mode: effective,
+            brightnessPct:
+              effective === "off"
+                ? 0
+                : effective === "on"
+                  ? lamp.onPercent
+                  : (lamp.dimPercent ?? 0),
+            online: true,
+            error: undefined,
+          };
+        });
+        return {
+          ...group,
+          mode: summarizeLightGroupModes(
+            lamps.map((l) => ({ mode: l.mode, dimPercent: l.dimPercent })),
+          ),
+          lamps,
+        };
+      }),
+    };
+  }
 
   useEffect(() => {
     const tickNow = () => setNowMs(Date.now());
@@ -547,7 +830,10 @@ export function SmarthomeSection({
 
     async function load() {
       try {
-        const res = await fetch("/api/smarthome", { cache: "no-store" });
+        const res = await fetch("/api/smarthome", {
+          cache: "no-store",
+          signal: AbortSignal.timeout(15_000),
+        });
         if (res.status === 401) {
           if (!cancelled) {
             setState((prev) => ({
@@ -586,9 +872,15 @@ export function SmarthomeSection({
         setState({ status: "live", data });
       } catch (err) {
         if (!cancelled) {
+          const aborted =
+            err instanceof DOMException && err.name === "TimeoutError";
           setState((prev) => ({
             status: "error",
-            message: err instanceof Error ? err.message : "Fehler",
+            message: aborted
+              ? "Smarthome-Status Timeout — offline Lampen?"
+              : err instanceof Error
+                ? err.message
+                : "Fehler",
             data: prev.data,
           }));
         }
@@ -614,7 +906,12 @@ export function SmarthomeSection({
 
     if (!initialData) {
       void load().finally(() => {
-        if (!cancelled) scheduleNext();
+        if (cancelled) return;
+        // Pick up stale-while-revalidate / finish probing offline lamps.
+        window.setTimeout(() => {
+          if (!cancelled) void load();
+        }, 3_000);
+        scheduleNext();
       });
     } else {
       scheduleNext();
@@ -826,10 +1123,130 @@ export function SmarthomeSection({
     }
   }
 
+  async function postLampCycle(lampId: string) {
+    const lamp = state.data?.lightGroups
+      .flatMap((g) => g.lamps)
+      .find((l) => l.id === lampId);
+    const next = nextLightMode(
+      lamp?.mode ?? "unknown",
+      lamp?.dimPercent != null,
+    );
+
+    setLightBusyIds((prev) => new Set(prev).add(`lamp:${lampId}`));
+    setActionErrors((prev) => {
+      const nextErr = { ...prev };
+      delete nextErr[`lamp:${lampId}`];
+      return nextErr;
+    });
+    setState((prev) =>
+      prev.data
+        ? { ...prev, status: "live", data: patchLampMode(prev.data, lampId, next) }
+        : prev,
+    );
+
+    try {
+      const res = await fetch("/api/smarthome/light", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lampId }),
+      });
+      const payload = (await res.json()) as {
+        error?: string;
+        mode?: LightMode;
+        result?: { ok: boolean; error?: string };
+      };
+      if (!res.ok || payload.result?.ok === false) {
+        setActionErrors((prev) => ({
+          ...prev,
+          [`lamp:${lampId}`]:
+            payload.result?.error ?? payload.error ?? `HTTP ${res.status}`,
+        }));
+      }
+      await refreshSoon();
+    } catch (err) {
+      setActionErrors((prev) => ({
+        ...prev,
+        [`lamp:${lampId}`]:
+          err instanceof Error ? err.message : "Lampenbefehl fehlgeschlagen",
+      }));
+    } finally {
+      setLightBusyIds((prev) => {
+        const nextBusy = new Set(prev);
+        nextBusy.delete(`lamp:${lampId}`);
+        return nextBusy;
+      });
+    }
+  }
+
+  async function postLightGroupCycle(groupId: string) {
+    const group = state.data?.lightGroups.find((g) => g.id === groupId);
+    const next = nextLightMode(group?.mode ?? "unknown");
+
+    setLightBusyIds((prev) => new Set(prev).add(`light-group:${groupId}`));
+    setActionErrors((prev) => {
+      const nextErr = { ...prev };
+      delete nextErr[`light-group:${groupId}`];
+      return nextErr;
+    });
+    setState((prev) =>
+      prev.data
+        ? {
+            ...prev,
+            status: "live",
+            data: patchLightGroupMode(prev.data, groupId, next),
+          }
+        : prev,
+    );
+
+    try {
+      const res = await fetch("/api/smarthome/light-group", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId }),
+      });
+      const payload = (await res.json()) as {
+        error?: string;
+        results?: { id: string; ok: boolean; error?: string }[];
+      };
+      if (!res.ok && res.status !== 207) {
+        setActionErrors((prev) => ({
+          ...prev,
+          [`light-group:${groupId}`]: payload.error ?? `HTTP ${res.status}`,
+        }));
+      } else if (payload.results?.some((r) => !r.ok)) {
+        const failed = payload.results
+          .filter((r) => !r.ok)
+          .map((r) => r.error ?? r.id)
+          .join("; ");
+        setActionErrors((prev) => ({
+          ...prev,
+          [`light-group:${groupId}`]: failed || "Teilfehler",
+        }));
+      }
+      await refreshSoon();
+    } catch (err) {
+      setActionErrors((prev) => ({
+        ...prev,
+        [`light-group:${groupId}`]:
+          err instanceof Error
+            ? err.message
+            : "Lampen-Gruppenbefehl fehlgeschlagen",
+      }));
+    } finally {
+      setLightBusyIds((prev) => {
+        const nextBusy = new Set(prev);
+        nextBusy.delete(`light-group:${groupId}`);
+        return nextBusy;
+      });
+    }
+  }
+
   const data = state.data;
   const feed = sectionFeedStatus({
     loading: state.status === "loading",
-    hasData: Boolean(data?.groups.length || data?.plugs.length),
+    hasData: Boolean(
+      data?.groups.length || data?.lightGroups.length || data?.plugs.length,
+    ),
     error: state.status === "error",
   });
 
@@ -872,11 +1289,37 @@ export function SmarthomeSection({
         </div>
       ) : state.status === "loading" ? (
         <p className="mt-5 text-sm text-muted">Laden…</p>
-      ) : (
+      ) : data?.lightGroups.length || data?.plugs.length ? null : (
         <p className="mt-5 text-sm text-muted">
           Keine Rollläden konfiguriert.
         </p>
       )}
+
+      {data?.lightGroups.length ? (
+        <>
+          <hr className="section-divider mt-8" />
+          <section className="mt-6" aria-labelledby="smarthome-lights-heading">
+            <h3
+              id="smarthome-lights-heading"
+              className="text-base font-semibold tracking-tight"
+            >
+              Lampen
+            </h3>
+            <div className="mt-4 flex flex-col gap-8">
+              {data.lightGroups.map((group) => (
+                <LightGroupBlock
+                  key={group.id}
+                  group={group}
+                  busyIds={lightBusyIds}
+                  actionErrors={actionErrors}
+                  onGroupCycle={(id) => void postLightGroupCycle(id)}
+                  onLampCycle={(id) => void postLampCycle(id)}
+                />
+              ))}
+            </div>
+          </section>
+        </>
+      ) : null}
 
       {data?.plugs.length ? (
         <>

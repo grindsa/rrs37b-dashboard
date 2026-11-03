@@ -30,11 +30,24 @@ function sweep(now: number): void {
 export function cacheGet<T>(key: string): T | undefined {
   const entry = store.get(key);
   if (!entry) return undefined;
-  if (Date.now() > entry.expiresAt) {
-    store.delete(key);
-    return undefined;
-  }
+  // Expired entries stay until sweep so cacheGetStale can serve them.
+  if (Date.now() > entry.expiresAt) return undefined;
   return entry.value as T;
+}
+
+/**
+ * Return a cached value even if TTL expired (for stale-while-revalidate).
+ * Does not delete the entry.
+ */
+export function cacheGetStale<T>(key: string): T | undefined {
+  const entry = store.get(key);
+  if (!entry) return undefined;
+  return entry.value as T;
+}
+
+/** True when a live (non-expired) entry exists. */
+export function cacheHasFresh(key: string): boolean {
+  return cacheGet(key) !== undefined;
 }
 
 export function cacheSet<T>(key: string, value: T, ttlMs: number): void {

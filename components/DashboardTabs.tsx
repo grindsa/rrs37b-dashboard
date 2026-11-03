@@ -3,6 +3,7 @@
 import {
   createContext,
   useContext,
+  useEffect,
   useId,
   useState,
   type ReactNode,
@@ -82,6 +83,11 @@ export function DashboardTabPanel({
   const active = useContext(ActiveTabContext);
   const baseId = useContext(TabBaseIdContext);
   const selected = active === id;
+  // Mount on first visit only — avoids probing Tuya/Shelly while another tab is open.
+  const [mounted, setMounted] = useState(selected);
+  useEffect(() => {
+    if (selected) setMounted(true);
+  }, [selected]);
 
   return (
     <div
@@ -91,7 +97,7 @@ export function DashboardTabPanel({
       hidden={!selected}
       className={selected ? "animate-fade-up" : undefined}
     >
-      {children}
+      {mounted ? children : null}
     </div>
   );
 }

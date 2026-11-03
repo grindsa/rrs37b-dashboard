@@ -1,25 +1,40 @@
-# Shelly device inventory — copy to config/smarthome.yml and set real LAN IPs.
+# Shelly / Tapo / LEDVANCE device inventory — copy to config/smarthome.yml
+# and set real LAN IPs (and Tuya keys for lamps).
 #
 #   cp config/smarthome.example.yml config/smarthome.yml
 #
 # Optional override path: SMARTHOME_CONFIG_FILE=/absolute/or/relative/path.yml
 #
-# Every device (cover, plug, meter) accepts an optional `password` (quoted
-# string). Without it, SHELLY_RPC_PASSWORD from .env is used. Entries sharing
-# an IP share one password. Generate one per device: openssl rand -base64 15
+# Every Shelly device (cover, plug, meter) accepts an optional `password`
+# (quoted string). Without it, SHELLY_RPC_PASSWORD from .env is used. Entries
+# sharing an IP share one password. Generate one per device:
+#   openssl rand -base64 15
+# Lamp `local_key` values are Tuya secrets — never commit real keys.
 # This file then holds secrets — keep it readable only by the deploy user and
 # the container user.
 
-# Shutter groups, shown in this order. Groups without covers are hidden.
+# Groups shown in this order. Each group has a required `type`:
+#   covers — roller shutters (list under `covers` with group: <id>)
+#   lights — LEDVANCE / Tuya lamps (list under `lamps` with group: <id>)
+# Empty groups (no matching devices) are hidden.
 groups:
   - id: dg
     name: Dachgeschoss
+    type: covers
   - id: og1
     name: 1. OG
+    type: covers
   - id: eg
     name: Erdgeschoss
+    type: covers
+  - id: wohn
+    name: Wohnbereich
+    type: lights
+  - id: flur
+    name: Flur & Küche
+    type: lights
 
-# Shelly 2PM covers. `group` (required) must match a group id above.
+# Shelly 2PM covers. `group` (required) must match a group with type: covers.
 covers:
   - id: dg-ost
     name: DG Ost
@@ -52,6 +67,38 @@ covers:
     ip: 192.168.0.122
     coverId: 0
     group: eg
+
+# LEDVANCE Smart+ WiFi (Tuya local). `group` must match type: lights.
+# Obtain device_id + local_key via tuya-cli wizard, tinytuya wizard, or a
+# Ledvance/Smart+ key export script — keep Smart+ closed while controlling.
+# Defaults: on_percent 100, protocol "3.5". dim_percent is optional —
+# omit it to turn that lamp off when the group (or lamp) cycles to dim.
+# DPs: 20 = on/off, 22 = brightness 10–1000 (percent mapped server-side).
+lamps:
+  - id: stehlampe
+    name: Stehlampe
+    ip: 192.168.0.210
+    device_id: "bfxxxxxxxxxxxxxxxxxx"
+    local_key: "change-me-local-key"
+    group: wohn
+    on_percent: 100
+    dim_percent: 70
+  - id: decke
+    name: Decke
+    ip: 192.168.0.211
+    device_id: "bfyyyyyyyyyyyyyyyyyy"
+    local_key: "change-me-local-key-2"
+    group: wohn
+    on_percent: 100
+    dim_percent: 40
+  - id: flur1
+    name: Flur
+    ip: 192.168.0.212
+    device_id: "bfzzzzzzzzzzzzzzzzzz"
+    local_key: "change-me-local-key-3"
+    group: flur
+    # no dim_percent → group dim turns this lamp off
+
 
 # Plugs. `vendor` is shelly (default) or tapo. Shelly uses `switchId` + optional
 # `password` (else SHELLY_RPC_PASSWORD). Tapo uses TAPO_EMAIL / TAPO_PASSWORD
