@@ -63,7 +63,6 @@ services:
         : "$${MOSQUITTO_NOAH_PASSWORD:?missing}" "$${MOSQUITTO_DASHBOARD_PASSWORD:?missing}"
         mosquitto_passwd -c -b /tmp/passwd noah "$$MOSQUITTO_NOAH_PASSWORD"
         mosquitto_passwd -b /tmp/passwd dashboard "$$MOSQUITTO_DASHBOARD_PASSWORD"
-        cp /mosquitto/config/acl /tmp/acl
         unset MOSQUITTO_NOAH_PASSWORD MOSQUITTO_DASHBOARD_PASSWORD
         exec mosquitto -c /mosquitto/config/mosquitto.conf
     # Started directly as the image's mosquitto user, so it needs no

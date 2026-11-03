@@ -42,6 +42,13 @@ else
   echo "Note: could not chown config/smarthome.yml to :1000 — using chmod 644 so the container can read it." >&2
 fi
 
+# Mosquitto runs as uid 1883; setgid "docker" trees often make these 660 and
+# the broker then crash-loops (Restarting (1)) because it can't read its config.
+if [[ -d deploy/mosquitto ]]; then
+  chmod 755 deploy/mosquitto
+  chmod 644 deploy/mosquitto/mosquitto.conf deploy/mosquitto/acl 2>/dev/null || true
+fi
+
 BRANCH="${DEPLOY_BRANCH:-main}"
 
 # Git refuses operations when the tree is owned by another user (common for
