@@ -3,6 +3,10 @@ import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/with-auth";
 import { getHouseCoords, getNearestStop } from "@/lib/bvg";
 
+function roundCoord(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
 export const GET = withAuth(async function GET(request: Request) {
   await connection();
 
@@ -10,8 +14,9 @@ export const GET = withAuth(async function GET(request: Request) {
   const latParam = searchParams.get("lat");
   const lonParam = searchParams.get("lon");
 
-  let lat = latParam != null ? Number(latParam) : NaN;
-  let lon = lonParam != null ? Number(lonParam) : NaN;
+  // Also rounded server-side, for clients that send full precision.
+  let lat = latParam != null ? roundCoord(Number(latParam)) : NaN;
+  let lon = lonParam != null ? roundCoord(Number(lonParam)) : NaN;
   let source: "gps" | "home" = "gps";
 
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
@@ -33,8 +38,6 @@ export const GET = withAuth(async function GET(request: Request) {
     const stop = await getNearestStop(lat, lon);
     return NextResponse.json({
       stop,
-      lat,
-      lon,
       source,
       fetchedAt: new Date().toISOString(),
     });

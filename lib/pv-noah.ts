@@ -148,7 +148,7 @@ function ensureSubscriber(url: string, topic: string): Promise<void> {
     };
 
     const timer = setTimeout(() => {
-      settleErr(new Error(`MQTT connect timeout (${url})`));
+      settleErr(new Error("MQTT connect timeout — läuft mosquitto?"));
     }, CONNECT_TIMEOUT_MS + 500);
 
     next.once("connect", () => {

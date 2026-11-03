@@ -133,10 +133,12 @@ async function resolveNearby(): Promise<NearbyInfo> {
     note = "GPS nicht verfügbar — Nähe Zuhause";
   }
 
+  // ~100 m precision is enough for the nearest stop and keeps exact
+  // positions out of proxy access logs.
   const params = new URLSearchParams();
   if (lat != null && lon != null) {
-    params.set("lat", String(lat));
-    params.set("lon", String(lon));
+    params.set("lat", lat.toFixed(3));
+    params.set("lon", lon.toFixed(3));
   }
 
   const qs = params.toString();

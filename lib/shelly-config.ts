@@ -7,6 +7,8 @@ export type { SensorLabel };
 
 export type SensorBinding = {
   label: SensorLabel;
+  /** Gateway plug id from smarthome.yml; safe to show in client warnings. */
+  gatewayId: string;
   /** Gateway Plug IP that should see this BLU device. */
   gatewayIp: string;
   /** Optional BLU MAC (aa:bb:…); required for reliable mapping once paired. */
@@ -20,8 +22,9 @@ export function getShellyBindings(): SensorBinding[] {
   if (live.config.sensors.length === 0) {
     throw new Error("Keine Sensoren unter sensors in config/smarthome.yml");
   }
-  return live.config.sensors.map(({ label, gatewayIp, mac }) => ({
+  return live.config.sensors.map(({ label, gatewayId, gatewayIp, mac }) => ({
     label,
+    gatewayId,
     gatewayIp,
     mac,
   }));

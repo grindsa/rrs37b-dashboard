@@ -19,8 +19,6 @@ export type ShellySensor = {
   batteryPct: number | null;
   updatedAt: string | null;
   online: boolean;
-  gatewayIp?: string;
-  mac?: string;
 };
 
 export type ShellySensorsResult = {
@@ -214,11 +212,11 @@ function deviceToSensor(
   if (!device) {
     if (!binding.mac) {
       warningSink.push(
-        `${binding.label}: no mac in smarthome.yml and no BTHome device named "${binding.label}" on ${binding.gatewayIp}`,
+        `${binding.label}: no mac in smarthome.yml and no BTHome device named "${binding.label}" on ${binding.gatewayId}`,
       );
     } else {
       warningSink.push(
-        `${binding.label}: BTHome device ${binding.mac} not found on ${binding.gatewayIp}`,
+        `${binding.label}: configured BTHome device not found on ${binding.gatewayId}`,
       );
     }
     return {
@@ -229,8 +227,6 @@ function deviceToSensor(
       batteryPct: null,
       updatedAt: null,
       online: false,
-      gatewayIp: binding.gatewayIp,
-      mac: binding.mac,
     };
   }
 
@@ -270,8 +266,6 @@ function deviceToSensor(
     batteryPct,
     updatedAt,
     online: hasReading && isFresh(updatedAt),
-    gatewayIp: device.gatewayIp,
-    mac: device.mac,
   };
 }
 
@@ -281,13 +275,16 @@ async function loadShellySensors(): Promise<ShellySensorsResult> {
   const devices: DiscoveredBthomeDevice[] = [];
 
   for (const host of uniqueGatewayIps(bindings)) {
+    // Client-facing warnings name the gateway by config id, never by IP.
+    const gatewayId =
+      bindings.find((b) => b.gatewayIp === host)?.gatewayId ?? "gateway";
     try {
       const components = await getDynamicComponents(host);
       const parsed = parseDevices(host, components);
       devices.push(...parsed);
       if (parsed.length === 0) {
         warnings.push(
-          `${host}: no BTHome devices paired yet (enable Bluetooth observer, then add BLU H&T under BTHome components)`,
+          `${gatewayId}: no BTHome devices paired yet (enable Bluetooth observer, then add BLU H&T under BTHome components)`,
         );
       }
     } catch (error) {
@@ -297,7 +294,7 @@ async function loadShellySensors(): Promise<ShellySensorsResult> {
           : error instanceof Error
             ? error.message
             : "unknown error";
-      warnings.push(`${host}: ${message}`);
+      warnings.push(`${gatewayId}: ${message}`);
     }
   }
 

@@ -12,8 +12,8 @@ const geistSans = Geist({
 export const metadata: Metadata = {
   title: "RRS37",
   applicationName: "RRS37",
-  description:
-    "Infoboard for Romain-Rolland-Straße 37B — sensors, weather, BVG",
+  description: "Private infoboard",
+  robots: { index: false, follow: false },
   appleWebApp: {
     capable: true,
     title: "RRS37",

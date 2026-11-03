@@ -71,18 +71,9 @@ export function proxy(request: NextRequest) {
     return applySessionCookie(NextResponse.next());
   }
 
-  // HTML pages: always reach the app shell (lock icon UX), but mark auth
-  // for downstream and refuse to leave a bad cookie around.
-  const requestHeaders = new Headers(request.headers);
-  requestHeaders.set(
-    "x-rrs37-auth",
-    authenticated ? "authenticated" : "anonymous",
-  );
-
-  const response = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
-  return applySessionCookie(response);
+  // HTML pages: always reach the app shell (lock icon UX); page.tsx checks
+  // the session itself. Refuse to leave a bad cookie around.
+  return applySessionCookie(NextResponse.next());
 }
 
 export const config = {

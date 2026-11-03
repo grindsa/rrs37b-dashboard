@@ -273,7 +273,7 @@ function buildPasswordMap(devices: PasswordDevice[]): Map<string, DevicePassword
     const existing = map.get(device.ip);
     if (existing && existing.password !== device.password) {
       throw new Error(
-        `${ERR_PREFIX}: "${existing.deviceId}" and "${device.id}" share IP ${device.ip} but have different passwords`,
+        `${ERR_PREFIX}: "${existing.deviceId}" and "${device.id}" share an IP but have different passwords`,
       );
     }
     if (!existing) {
@@ -352,8 +352,13 @@ function parseYamlText(raw: string): ParseResult {
   try {
     parsed = parseYaml(raw);
   } catch (error) {
+    // The library message quotes file lines, which may contain passwords.
+    console.error(
+      `[smarthome-config] invalid YAML: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    const line = (error as { linePos?: { line: number }[] }).linePos?.[0]?.line;
     throw new Error(
-      `${ERR_PREFIX}: invalid YAML (${error instanceof Error ? error.message : "parse error"})`,
+      `${ERR_PREFIX}: invalid YAML${line ? ` (line ${line})` : ""}`,
     );
   }
   if (parsed === null || parsed === undefined) {
@@ -446,7 +451,7 @@ export function getSmarthomeConfig(): SmarthomeConfigLoad {
         error:
           error instanceof Error
             ? error.message
-            : `${ERR_PREFIX}: Datei ungültig (${livePath})`,
+            : `${ERR_PREFIX}: smarthome.yml ungültig`,
         config: emptyConfig(),
       };
     }
@@ -460,7 +465,7 @@ export function getSmarthomeConfig(): SmarthomeConfigLoad {
         config: readYamlFile(examplePath, false),
         source: "example",
         path: examplePath,
-        warning: `Keine Live-Config unter ${livePath} — Beispiel-Layout (Steuerung aus)`,
+        warning: "Keine Live-Config (config/smarthome.yml) — Beispiel-Layout (Steuerung aus)",
       };
     } catch (error) {
       return {
@@ -474,9 +479,12 @@ export function getSmarthomeConfig(): SmarthomeConfigLoad {
     }
   }
 
+  console.error(
+    `[smarthome-config] neither ${livePath} nor ${examplePath} found`,
+  );
   return {
     ok: false,
-    error: `${ERR_PREFIX}: weder ${livePath} noch ${examplePath} gefunden`,
+    error: `${ERR_PREFIX}: weder smarthome.yml noch smarthome.example.yml gefunden`,
     config: emptyConfig(),
   };
 }

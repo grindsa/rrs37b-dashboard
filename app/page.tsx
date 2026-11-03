@@ -88,6 +88,7 @@ async function AuthGatedHome() {
       ) : (
         <LockedPanel />
       )}
+      <Footer authenticated={authenticated} />
     </>
   );
 }
@@ -97,7 +98,19 @@ function AuthGatedFallback() {
     <>
       <Header initialAuth="anonymous" />
       <LockedPanel />
+      <Footer authenticated={false} />
     </>
+  );
+}
+
+/** Locked visitors must not learn what the dashboard controls. */
+function Footer({ authenticated }: { authenticated: boolean }) {
+  return (
+    <p className="pb-2 pt-2 text-center text-[0.7rem] tracking-wide text-muted">
+      {authenticated
+        ? "RRS37 · Shelly LAN · Open-Meteo · BVG · PV · Smarthome"
+        : "RRS37"}
+    </p>
   );
 }
 
@@ -108,10 +121,6 @@ export default function Home() {
         <Suspense fallback={<AuthGatedFallback />}>
           <AuthGatedHome />
         </Suspense>
-
-        <p className="pb-2 pt-2 text-center text-[0.7rem] tracking-wide text-muted">
-          RRS37 · Shelly LAN · Open-Meteo · BVG · PV · Smarthome
-        </p>
       </main>
     </div>
   );

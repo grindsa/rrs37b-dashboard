@@ -7,9 +7,14 @@ import { getShellyBindings, uniqueGatewayIps } from "@/lib/shelly-config";
 /**
  * Lists BTHome devices currently paired on the configured gateway plugs.
  * Use this once to fill the sensor `mac` values in config/smarthome.yml.
+ * Returns gateway IPs and MACs, so it is off unless ENABLE_DISCOVERY=1.
  */
 export const GET = withAuth(async function GET() {
   await connection();
+
+  if (process.env.ENABLE_DISCOVERY?.trim() !== "1") {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
 
   try {
     const hosts = uniqueGatewayIps(getShellyBindings());

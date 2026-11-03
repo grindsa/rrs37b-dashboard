@@ -18,7 +18,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The dev server only listens on localhost, so it isn't reachable from the LAN.
 
 ## Production deploy
 
@@ -128,9 +128,7 @@ docs/                # nginx + Caddy examples
 
 Both Plug S Gen3 gateways must have Bluetooth observer enabled and each BLU H&T added under **BTHome components** (temperature + humidity sensors). Then:
 
-```bash
-curl -s http://localhost:3000/api/sensors/discover | jq
-```
+Discovery returns gateway IPs and BLE MACs, so it is off by default. Set `ENABLE_DISCOVERY=1` in `.env`, restart or redeploy, then open `/api/sensors/discover` in a browser where the dashboard is unlocked. Remove the variable again when you're done.
 
 The gateways are listed under `plugs` (with `hidden: true`) and the sensors under `sensors` in `config/smarthome.yml`. Discovery queries every gateway referenced by a sensor. Copy each device `mac` into the matching sensor entry:
 

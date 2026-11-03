@@ -82,12 +82,12 @@ export async function fetchEz1Production(): Promise<Ez1Reading | null> {
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
       throw new Error(
-        `APsystems EZ1-M Timeout (${host}:${port}) — Local API offline?`,
+        "APsystems EZ1-M Timeout — Local API offline?",
       );
     }
     if (error instanceof TypeError) {
       throw new Error(
-        `APsystems EZ1-M nicht erreichbar (${host}:${port}) — Local Mode „Continuously“?`,
+        "APsystems EZ1-M nicht erreichbar — Local Mode „Continuously“?",
       );
     }
     throw error;
