@@ -1,9 +1,10 @@
 /**
  * Smarthome device inventory from a YAML file: typed groups (covers | lights),
- * covers, lamps (LEDVANCE/Tuya), plugs (Shelly or Tapo), BLU sensors (via Shelly
- * gateway plugs) and energy meters.
+ * covers, lamps (LEDVANCE/Tuya), plugs (Shelly, Tapo, or FSAPI), BLU sensors
+ * (via Shelly gateway plugs) and energy meters.
  * Shelly devices without `password` use SHELLY_RPC_PASSWORD from env.
  * Tapo plugs use TAPO_EMAIL / TAPO_PASSWORD from env (local KLAP).
+ * FSAPI devices (e.g. Hama IR110) use optional YAML `pin` / `port` (LAN HTTP).
  * Lamp `local_key` values are server secrets — never expose to the client.
  */
 
@@ -57,21 +58,28 @@ export type SmarthomeGroupConfig = {
   lamps: SmarthomeLampConfig[];
 };
 
-export const PLUG_VENDORS = ["shelly", "tapo"] as const;
+export const PLUG_VENDORS = ["shelly", "tapo", "fsapi"] as const;
 export type PlugVendor = (typeof PLUG_VENDORS)[number];
+
+export const FSAPI_DEFAULT_PIN = "1234";
+export const FSAPI_DEFAULT_PORT = 80;
 
 export type SmarthomePlugConfig = {
   id: string;
   name: string;
   ip: string;
-  /** shelly (default) or tapo. */
+  /** shelly (default), tapo, or fsapi (Frontier Silicon / UNDOK). */
   vendor: PlugVendor;
-  /** Shelly Switch component id (usually 0). Ignored for Tapo. */
+  /** Shelly Switch component id (usually 0). Ignored for Tapo / FSAPI. */
   switchId: number;
   /** Hidden plugs are never listed or switchable via the API. */
   hidden: boolean;
-  /** Shelly RPC password only; ignored for Tapo (use TAPO_* env). */
+  /** Shelly RPC password only; rejected for Tapo / FSAPI. */
   password?: string;
+  /** FSAPI NetRemote PIN (default 1234). Ignored for other vendors. */
+  pin?: string;
+  /** FSAPI HTTP port (default 80). Ignored for other vendors. */
+  port?: number;
 };
 
 export type SmarthomeSensorConfig = {
@@ -222,6 +230,36 @@ function asOptionalBoolean(value: unknown, pathLabel: string): boolean {
   return value;
 }
 
+function asOptionalFsapiPin(
+  value: unknown,
+  pathLabel: string,
+): string | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0) {
+    return String(value);
+  }
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel} must be a non-empty quoted string`,
+    );
+  }
+  return value.trim();
+}
+
+function asOptionalFsapiPort(
+  value: unknown,
+  pathLabel: string,
+): number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 65535) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel} must be an integer 1–65535`,
+    );
+  }
+  return n;
+}
+
 function asOptionalMac(value: unknown, pathLabel: string): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   const mac = asString(value, pathLabel).toLowerCase().replace(/-/g, ":");
@@ -349,11 +387,30 @@ function parsePlug(raw: unknown, pathLabel: string): SmarthomePlugConfig {
   const obj = asRecord(raw, pathLabel);
   const vendor = asPlugVendor(obj.vendor, `${pathLabel}.vendor`);
   const password = asOptionalPassword(obj.password, `${pathLabel}.password`);
+  const pin = asOptionalFsapiPin(obj.pin, `${pathLabel}.pin`);
+  const port = asOptionalFsapiPort(obj.port, `${pathLabel}.port`);
+
   if (vendor === "tapo" && password) {
     throw new Error(
       `${ERR_PREFIX}: ${pathLabel}.password is Shelly-only — Tapo uses TAPO_EMAIL / TAPO_PASSWORD`,
     );
   }
+  if (vendor === "fsapi" && password) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.password is Shelly-only — FSAPI uses \`pin\``,
+    );
+  }
+  if (vendor !== "fsapi" && pin !== undefined) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.pin is FSAPI-only (vendor: fsapi)`,
+    );
+  }
+  if (vendor !== "fsapi" && port !== undefined) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.port is FSAPI-only (vendor: fsapi)`,
+    );
+  }
+
   return {
     id: asString(obj.id, `${pathLabel}.id`),
     name: asString(obj.name, `${pathLabel}.name`),
@@ -362,6 +419,12 @@ function parsePlug(raw: unknown, pathLabel: string): SmarthomePlugConfig {
     switchId: asComponentId(obj.switchId, `${pathLabel}.switchId`),
     hidden: asOptionalBoolean(obj.hidden, `${pathLabel}.hidden`),
     password,
+    ...(vendor === "fsapi"
+      ? {
+          pin: pin ?? FSAPI_DEFAULT_PIN,
+          port: port ?? FSAPI_DEFAULT_PORT,
+        }
+      : {}),
   };
 }
 
@@ -380,7 +443,7 @@ function parseSensor(
   }
   if (gateway.vendor !== "shelly") {
     throw new Error(
-      `${ERR_PREFIX}: ${pathLabel}.gateway "${gatewayId}" must be vendor shelly (got ${gateway.vendor}) — BLU gateways cannot be Tapo`,
+      `${ERR_PREFIX}: ${pathLabel}.gateway "${gatewayId}" must be vendor shelly (got ${gateway.vendor}) — BLU gateways cannot be Tapo/FSAPI`,
     );
   }
   return {
@@ -488,9 +551,9 @@ function parseConfig(parsed: unknown): ParseResult {
   }
 
   for (const plug of plugs) {
-    if (plug.vendor === "tapo" && plug.hidden) {
+    if (plug.vendor !== "shelly" && plug.hidden) {
       notes.push(
-        `warning: plug "${plug.id}" is vendor tapo with hidden: true — Tapo plugs cannot be BLU gateways`,
+        `warning: plug "${plug.id}" is vendor ${plug.vendor} with hidden: true — only Shelly plugs can be BLU gateways`,
       );
     }
   }

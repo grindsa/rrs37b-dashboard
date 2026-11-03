@@ -1329,7 +1329,7 @@ export function SmarthomeSection({
               id="smarthome-plugs-heading"
               className="text-base font-semibold tracking-tight"
             >
-              Steckdosen
+              Smarthomegeräte
             </h3>
             <ul className="mt-4 flex flex-col gap-4">
               {data.plugs.map((plug) => (

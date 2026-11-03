@@ -1,5 +1,5 @@
-# Shelly / Tapo / LEDVANCE device inventory — copy to config/smarthome.yml
-# and set real LAN IPs (and Tuya keys for lamps).
+# Shelly / Tapo / FSAPI / LEDVANCE device inventory — copy to
+# config/smarthome.yml and set real LAN IPs (and Tuya keys for lamps).
 #
 #   cp config/smarthome.example.yml config/smarthome.yml
 #
@@ -100,11 +100,16 @@ lamps:
     # no dim_percent → group dim turns this lamp off
 
 
-# Plugs. `vendor` is shelly (default) or tapo. Shelly uses `switchId` + optional
-# `password` (else SHELLY_RPC_PASSWORD). Tapo uses TAPO_EMAIL / TAPO_PASSWORD
-# from .env (local KLAP to `ip`); do not set `password` on Tapo entries.
-# `hidden: true` keeps a plug out of the Smarthome tab — use it for Shelly BLE
-# gateways only (Tapo cannot be a sensor gateway).
+# Plugs / power devices. `vendor` is shelly (default), tapo, or fsapi.
+# Shelly uses `switchId` + optional `password` (else SHELLY_RPC_PASSWORD).
+# Tapo uses TAPO_EMAIL / TAPO_PASSWORD from .env (local KLAP to `ip`); do not
+# set `password` on Tapo entries.
+# FSAPI (Frontier Silicon / UNDOK, e.g. Hama IR110): power on/off only via LAN
+# HTTP. Optional `pin` (default "1234") and `port` (default 80). On the radio
+# enable Keep network connected, or standby drops Wi‑Fi and remote power-on
+# fails. Do not set Shelly `password` on FSAPI entries.
+# `hidden: true` keeps a device out of the Smarthome tab — use it for Shelly
+# BLE gateways only (Tapo/FSAPI cannot be a sensor gateway).
 plugs:
   - id: plug-1
     name: Shelly Plug S
@@ -114,6 +119,12 @@ plugs:
     name: Tapo P100
     ip: 192.168.0.140
     vendor: tapo
+  - id: radio-kueche
+    name: Küchenradio
+    vendor: fsapi
+    ip: 192.168.0.150
+    # pin: "1234"   # optional; NetRemote PIN
+    # port: 80      # optional; some FS devices use 2244
   - id: gw-aussen-arbeit
     name: Gateway Außen/Arbeitszimmer
     ip: 192.168.0.10

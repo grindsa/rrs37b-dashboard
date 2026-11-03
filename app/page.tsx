@@ -44,14 +44,17 @@ async function WeatherBlock() {
 }
 
 /**
- * Session cookie read must stay behind <Suspense> when Cache Components
- * is enabled — otherwise `next build` fails with blocking-prerender-dynamic.
+ * Session cookie + expiry (Date.now) must stay behind <Suspense> with
+ * `await connection()` when Cache Components is enabled — otherwise Next
+ * fails with blocking-prerender-dynamic / blocking-prerender-current-time.
  *
  * Tab bodies are children of the client tab shell (not props) so Suspense can
  * stream. Only the home tab is SSR-fetched; BVG / PV / Smarthome load on the
  * client after paint so slow Shelly cover polls cannot block first paint.
  */
 async function AuthGatedHome() {
+  // Session expiry uses Date.now() — must be request-time under Cache Components.
+  await connection();
   const authenticated = await isAuthenticated();
   const initialAuth = await getAuthStatus();
 

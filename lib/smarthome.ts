@@ -7,6 +7,11 @@ import {
 } from "./cache";
 import { shellyRpc, ShellyRpcError } from "./shelly-rpc";
 import { takeControlSlot } from "./control-throttle";
+import {
+  getFsapiPowerOn,
+  setFsapiPowerOn,
+  FsapiPowerError,
+} from "./fsapi-power";
 import { getTapoPlugOn, setTapoPlugOn, TapoPlugError } from "./tapo-plug";
 import {
   classifyLightMode,
@@ -242,7 +247,11 @@ async function readCoverStatus(
 }
 
 function plugErrorMessage(error: unknown): string {
-  if (error instanceof ShellyRpcError || error instanceof TapoPlugError) {
+  if (
+    error instanceof ShellyRpcError ||
+    error instanceof TapoPlugError ||
+    error instanceof FsapiPowerError
+  ) {
     return error.message;
   }
   if (error instanceof Error) return error.message;
@@ -261,6 +270,15 @@ async function readPlugStatus(
   try {
     if (plug.vendor === "tapo") {
       const on = await getTapoPlugOn(plug.ip);
+      return { id: plug.id, name: plug.name, online: true, on };
+    }
+
+    if (plug.vendor === "fsapi") {
+      const on = await getFsapiPowerOn({
+        ip: plug.ip,
+        pin: plug.pin,
+        port: plug.port,
+      });
       return { id: plug.id, name: plug.name, online: true, on };
     }
 
@@ -579,6 +597,11 @@ export async function runPlugSet(
   try {
     if (plug.vendor === "tapo") {
       await setTapoPlugOn(plug.ip, on);
+    } else if (plug.vendor === "fsapi") {
+      await setFsapiPowerOn(
+        { ip: plug.ip, pin: plug.pin, port: plug.port },
+        on,
+      );
     } else {
       await shellyRpc(plug.ip, "Switch.Set", { id: plug.switchId, on });
     }
