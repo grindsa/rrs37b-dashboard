@@ -163,6 +163,8 @@ meters:
 
 Uses the existing Shelly Gen2 RPC client (`EM.GetStatus` → `total_act_power`).
 
+If a Growatt NOAH uses the same Pro 3EM as its smart meter (Smart Self-Consumption), keep Shelly authentication **off** and set no `password`. The NOAH reads the meter locally without credentials: with authentication on, switching to Smart Self-Consumption fails with "Set failed" in ShinePhone, and its retries put the meter into auth backoff (HTTP 429), which also blocks the dashboard. The meter has no relay, so the exposure is read access and its settings on the LAN.
+
 ### 2. APsystems EZ1-M Local API (solar W)
 
 Local HTTP is **off by default**. Enable it once in **AP EasyPower**:

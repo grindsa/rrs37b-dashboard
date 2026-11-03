@@ -85,6 +85,9 @@ sensors:
     mac: aa:bb:cc:00:11:44
 
 # Shelly Pro 3EM. The first meter is used for Hausverbrauch on the PV tab.
+# If a Growatt NOAH uses this meter for Smart Self-Consumption, keep Shelly
+# authentication off and set no password: the NOAH cannot log in, fails with
+# "Set failed", and its retries lock the meter out for the dashboard too.
 meters:
   - id: pro3em
     ip: 192.168.0.40
