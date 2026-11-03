@@ -87,6 +87,9 @@ See `.env.example`. Never commit `.env` (repo is public).
 
 | Variable | Purpose |
 |----------|---------|
+| `AUTH_SECRET` | Signs the session cookie (`openssl rand -hex 32`) |
+| `ACCESS_TOKENS` | Comma-separated unlock codes, max 5, each ≥ 24 characters (shorter ones are ignored). Removing a code logs out the devices that used it |
+| `SESSION_EPOCH` | Optional. Change to any new value to log out every device. Sessions last 14 days since last use |
 | `SHELLY_RPC_PASSWORD` | Fallback RPC password for Shelly devices without `password` in the YAML |
 | `SMARTHOME_CONFIG_FILE` | Optional path to Smarthome YAML (default `config/smarthome.yml`) |
 | `OPEN_METEO_LAT` / `LON` | Fixed coords for 37B (`52.565379` / `13.441779`) |

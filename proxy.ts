@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import {
+  renewSessionValue,
   SESSION_COOKIE,
+  SESSION_TTL_SECONDS,
   sessionCookieOptions,
   verifySessionValue,
 } from "@/lib/auth";
@@ -36,27 +38,37 @@ export function proxy(request: NextRequest) {
   const session = verifySessionValue(raw);
   const authenticated = session.ok;
 
-  // Clear broken cookies early.
-  const clearBadCookie = (response: NextResponse) => {
+  // Clear broken cookies early; slide the expiry of valid ones.
+  const applySessionCookie = (response: NextResponse) => {
     if (raw && !session.ok) {
       response.cookies.set(SESSION_COOKIE, "", {
         ...sessionCookieOptions(0),
         maxAge: 0,
       });
     }
+    if (session.ok) {
+      const renewed = renewSessionValue(session);
+      if (renewed) {
+        response.cookies.set(
+          SESSION_COOKIE,
+          renewed,
+          sessionCookieOptions(SESSION_TTL_SECONDS),
+        );
+      }
+    }
     return response;
   };
 
   if (pathname.startsWith("/api/")) {
     if (!authenticated) {
-      return clearBadCookie(
+      return applySessionCookie(
         NextResponse.json(
           { error: "unauthorized", status: "anonymous" },
           { status: 401 },
         ),
       );
     }
-    return NextResponse.next();
+    return applySessionCookie(NextResponse.next());
   }
 
   // HTML pages: always reach the app shell (lock icon UX), but mark auth
@@ -70,7 +82,7 @@ export function proxy(request: NextRequest) {
   const response = NextResponse.next({
     request: { headers: requestHeaders },
   });
-  return clearBadCookie(response);
+  return applySessionCookie(response);
 }
 
 export const config = {

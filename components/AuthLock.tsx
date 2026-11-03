@@ -135,6 +135,13 @@ export function AuthLock({ initialStatus }: { initialStatus: AuthStatus }) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token }),
         });
+        if (res.status === 429) {
+          const retryAfter = Number(res.headers.get("retry-after")) || 60;
+          setError(
+            `Zu viele Fehlversuche — bitte in ${Math.ceil(retryAfter / 60)} Min. erneut versuchen.`,
+          );
+          return;
+        }
         if (!res.ok) {
           setStatus("invalid");
           setError("Ungültiger Zugangscode.");
