@@ -208,12 +208,18 @@ export async function getBvgDepartures(options?: {
 }): Promise<BvgDeparturesResult> {
   const stopId = options?.stopId?.trim();
   if (stopId) {
-    const nameKey = options?.stopName?.trim() ?? "";
-    return cacheGetOrSet(
-      `bvg:departures:${stopId}:${nameKey}`,
+    // Keyed by stop only; the client-supplied name is display-only.
+    const cached = await cacheGetOrSet(
+      `bvg:departures:${stopId}`,
       CACHE_TTL.bvg,
-      () => loadSingleDepartures(stopId, options?.stopName),
+      () => loadSingleDepartures(stopId),
     );
+    const stopName = options?.stopName?.trim();
+    if (!stopName) return cached;
+    return {
+      ...cached,
+      stops: cached.stops.map((stop) => ({ ...stop, stopName })),
+    };
   }
 
   return cacheGetOrSet("bvg:home", CACHE_TTL.bvg, loadHomeDepartures);

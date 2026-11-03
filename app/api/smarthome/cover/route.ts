@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/with-auth";
 import { readJsonBody } from "@/lib/request-guard";
+import { throttledResponse } from "@/lib/control-throttle";
 import { isCoverAction, runSingleCoverAction } from "@/lib/smarthome";
 
 export const POST = withAuth(async function POST(request: Request) {
@@ -36,6 +37,8 @@ export const POST = withAuth(async function POST(request: Request) {
       status: result.result.ok ? 200 : 502,
     });
   } catch (error) {
+    const throttled = throttledResponse(error);
+    if (throttled) return throttled;
     const message =
       error instanceof Error ? error.message : "Cover-Befehl fehlgeschlagen";
     const status = message.startsWith("Unbekanntes") ? 404 : 400;

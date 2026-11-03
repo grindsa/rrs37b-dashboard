@@ -1,5 +1,6 @@
 import { cacheDelete, cacheGetOrSet, CACHE_TTL } from "./cache";
 import { shellyRpc, ShellyRpcError } from "./shelly-rpc";
+import { takeControlSlot } from "./control-throttle";
 import {
   findCover,
   findGroup,
@@ -319,6 +320,10 @@ export async function runGroupCoverAction(
   if (!group) {
     throw new Error(`Unbekannte Gruppe: ${groupId}`);
   }
+  // "stop" must always get through to halt a moving shutter.
+  if (action !== "stop") {
+    takeControlSlot(group.covers.map((cover) => `cover:${cover.id}`));
+  }
 
   const results = await Promise.all(
     group.covers.map((cover) => runCoverAction(cover, action)),
@@ -345,6 +350,7 @@ export async function runSingleCoverAction(
   if (!cover) {
     throw new Error(`Unbekanntes Rollo: ${coverId}`);
   }
+  if (action !== "stop") takeControlSlot([`cover:${cover.id}`]);
 
   const result = await runCoverAction(cover, action);
   invalidateSmarthomeStatusCache();
@@ -369,6 +375,7 @@ export async function runPlugSet(
   if (!plug) {
     throw new Error(`Unbekannter Plug: ${plugId}`);
   }
+  takeControlSlot([`plug:${plug.id}`]);
 
   try {
     await shellyRpc(plug.ip, "Switch.Set", { id: plug.switchId, on });

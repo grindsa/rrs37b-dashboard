@@ -1,0 +1,9 @@
+# noah-mqtt publishes state and subscribes to <prefix>/<serial>/parameters/set,
+# which changes battery parameters via the Growatt cloud. Only it may write.
+user noah
+topic readwrite noah2mqtt/#
+topic readwrite homeassistant/#
+
+# The dashboard only reads state; it must never publish commands.
+user dashboard
+topic read noah2mqtt/#

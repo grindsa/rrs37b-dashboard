@@ -58,6 +58,47 @@ if [[ -n "${COMPOSE_PROFILES}" ]]; then
   echo "==> Compose profiles: ${COMPOSE_PROFILES}"
 fi
 
+# Value of the last KEY= line in an env file (quotes and " # comment" stripped).
+env_value() {
+  local line
+  line="$(grep -E "^[[:space:]]*$2=" "$1" 2>/dev/null | tail -n1 || true)"
+  line="${line#*=}"
+  line="${line%$'\r'}"
+  line="$(printf '%s' "$line" | sed -E 's/[[:space:]]+#.*$//; s/[[:space:]]+$//')"
+  line="${line#\"}"; line="${line%\"}"
+  line="${line#\'}"; line="${line%\'}"
+  printf '%s' "$line"
+}
+
+# Mosquitto accounts: noah-mqtt may write (battery commands), the dashboard
+# only reads. The broker gets both passwords via .env.mosquitto; it never sees
+# the Growatt login, and the dashboard never sees the noah password.
+if [[ "${COMPOSE_PROFILES:-}" == *noah* ]]; then
+  NOAH_MQTT_PW="$(env_value .env.noah MQTT_PASSWORD)"
+  DASHBOARD_MQTT_PW="$(env_value .env NOAH_MQTT_PASSWORD)"
+  PW_PATTERN='^[A-Za-z0-9._~+=-]{16,}$'
+  if ! [[ "$NOAH_MQTT_PW" =~ $PW_PATTERN && "$DASHBOARD_MQTT_PW" =~ $PW_PATTERN ]] \
+    || [[ "$NOAH_MQTT_PW" == "$DASHBOARD_MQTT_PW" ]]; then
+    cat >&2 <<'MSG'
+ERROR: MQTT broker passwords missing or invalid (profile noah).
+Need two different passwords, 16+ characters of [A-Za-z0-9._~+=-]:
+  MQTT_PASSWORD in .env.noah      (noah-mqtt, read/write)
+  NOAH_MQTT_PASSWORD in .env      (dashboard, read-only)
+For example:
+  echo "MQTT_PASSWORD=$(openssl rand -hex 24)" >> .env.noah
+  echo "NOAH_MQTT_PASSWORD=$(openssl rand -hex 24)" >> .env
+MSG
+    exit 1
+  fi
+  (
+    umask 077
+    printf 'MOSQUITTO_NOAH_PASSWORD=%s\nMOSQUITTO_DASHBOARD_PASSWORD=%s\n' \
+      "$NOAH_MQTT_PW" "$DASHBOARD_MQTT_PW" > .env.mosquitto.tmp
+    mv .env.mosquitto.tmp .env.mosquitto
+  )
+  unset NOAH_MQTT_PW DASHBOARD_MQTT_PW
+fi
+
 echo "==> Building and starting containers (version ${BUILD_TIME})"
 if ! docker compose build --build-arg "BUILD_TIME=${BUILD_TIME}"; then
   echo "ERROR: docker compose build failed" >&2

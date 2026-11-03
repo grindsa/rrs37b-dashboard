@@ -10,6 +10,23 @@ type CacheEntry<T> = {
 
 const store = new Map<string, CacheEntry<unknown>>();
 
+/** Bounds memory even if callers produce many distinct keys. */
+const MAX_ENTRIES = 500;
+const SWEEP_INTERVAL_MS = 60_000;
+let lastSweep = 0;
+
+function sweep(now: number): void {
+  lastSweep = now;
+  for (const [key, entry] of store) {
+    if (now > entry.expiresAt) store.delete(key);
+  }
+  // Map iterates in insertion order, so this drops the oldest entries first.
+  for (const key of store.keys()) {
+    if (store.size <= MAX_ENTRIES) break;
+    store.delete(key);
+  }
+}
+
 export function cacheGet<T>(key: string): T | undefined {
   const entry = store.get(key);
   if (!entry) return undefined;
@@ -21,7 +38,12 @@ export function cacheGet<T>(key: string): T | undefined {
 }
 
 export function cacheSet<T>(key: string, value: T, ttlMs: number): void {
-  store.set(key, { value, expiresAt: Date.now() + ttlMs });
+  const now = Date.now();
+  store.delete(key);
+  store.set(key, { value, expiresAt: now + ttlMs });
+  if (store.size > MAX_ENTRIES || now - lastSweep > SWEEP_INTERVAL_MS) {
+    sweep(now);
+  }
 }
 
 export function cacheDelete(key: string): void {

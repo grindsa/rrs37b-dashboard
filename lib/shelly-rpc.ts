@@ -60,17 +60,33 @@ const sessions = new Map<string, AuthSession>();
  * session refresh → 401 storms → Shelly auth backoff (HTTP 429).
  */
 const hostTails = new Map<string, Promise<unknown>>();
+const hostDepth = new Map<string, number>();
+/** Offline device × 8 s timeout per call: reject instead of queueing forever. */
+const MAX_QUEUE_DEPTH = 10;
 
 function withHostLock<T>(host: string, fn: () => Promise<T>): Promise<T> {
+  const depth = hostDepth.get(host) ?? 0;
+  if (depth >= MAX_QUEUE_DEPTH) {
+    return Promise.reject(
+      new ShellyRpcError("Shelly busy — too many queued requests", host, 503),
+    );
+  }
+  hostDepth.set(host, depth + 1);
+
   const prev = hostTails.get(host) ?? Promise.resolve();
   const run = prev.catch(() => undefined).then(fn);
-  hostTails.set(
-    host,
-    run.then(
+  const tail = run
+    .then(
       () => undefined,
       () => undefined,
-    ),
-  );
+    )
+    .finally(() => {
+      const left = (hostDepth.get(host) ?? 1) - 1;
+      if (left > 0) hostDepth.set(host, left);
+      else hostDepth.delete(host);
+      if (hostTails.get(host) === tail) hostTails.delete(host);
+    });
+  hostTails.set(host, tail);
   return run;
 }
 

@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/with-auth";
 import { readJsonBody } from "@/lib/request-guard";
+import { throttledResponse } from "@/lib/control-throttle";
 import { isCoverAction, runGroupCoverAction } from "@/lib/smarthome";
 
 export const POST = withAuth(async function POST(request: Request) {
@@ -35,6 +36,8 @@ export const POST = withAuth(async function POST(request: Request) {
     const allOk = result.results.every((r) => r.ok);
     return NextResponse.json(result, { status: allOk ? 200 : 207 });
   } catch (error) {
+    const throttled = throttledResponse(error);
+    if (throttled) return throttled;
     const message =
       error instanceof Error ? error.message : "Gruppenbefehl fehlgeschlagen";
     const status = message.startsWith("Unbekannte") ? 404 : 400;

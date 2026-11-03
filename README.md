@@ -45,7 +45,7 @@ Build runs **on the webserver** (no image registry). The app joins the existing 
    - Caddy: `docs/Caddyfile.example`
    - nginx: `docs/nginx.example.conf`
 
-   The app sends CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy` and `Permissions-Policy` itself (`next.config.ts`); the proxy only adds HSTS. The containers run with a read-only root filesystem (except noah-mqtt), no capabilities, `no-new-privileges` and memory limits (`docker-compose.yml`).
+   The app sends CSP, `X-Frame-Options`, `nosniff`, `Referrer-Policy` and `Permissions-Policy` itself (`next.config.ts`); the proxy only adds HSTS. The containers run with a read-only root filesystem, no capabilities, `no-new-privileges` and memory limits (`docker-compose.yml`).
 
 4. Point DNS A/AAAA for `rrs37b.mewes-im-netz.de` at the server.
 
@@ -60,7 +60,7 @@ cd /srv/stacks/rrs37-dashboard
 ./deploy.sh
 ```
 
-`deploy.sh` does `git pull --ff-only`, `docker compose build`, and `docker compose up -d`. If `GROWATT_USERNAME` is set in `.env`, it also starts the `noah` Compose profile (Mosquitto + noah-mqtt). Check with `docker compose ps` and open `https://rrs37b.mewes-im-netz.de`.
+`deploy.sh` does `git pull --ff-only`, `docker compose build`, and `docker compose up -d`. If `GROWATT_USERNAME` is set in `.env.noah`, it also starts the `noah` Compose profile (Mosquitto + noah-mqtt). Check with `docker compose ps` and open `https://rrs37b.mewes-im-netz.de`.
 
 The server must reach Shelly devices and the EZ1-M on the LAN.
 
@@ -98,7 +98,9 @@ See `.env.example`. Never commit `.env` (repo is public).
 | `BVG_STOP_*` | Stop IDs/labels; 1+2 = default two-column Zuhause, 3+ = picker options |
 | `APSYSTEMS_EZ1_HOST` | EZ1-M LAN IP — solar production (`p1 + p2`) |
 | `NOAH_MQTT_URL` | MQTT broker for NOAH SoC (e.g. `mqtt://mosquitto:1883`) |
+| `NOAH_MQTT_PASSWORD` | Read-only broker account `dashboard` (required with profile `noah`) |
 | `GROWATT_USERNAME` / `PASSWORD` | Growatt account for noah-mqtt — in `.env.noah`, never `.env` |
+| `MQTT_PASSWORD` | Read/write broker account `noah` — in `.env.noah` |
 
 ## Repo layout
 
@@ -190,19 +192,24 @@ curl -s "http://$APSYSTEMS_EZ1_HOST:8050/getOutputData"
 
 NOAH has no clean local API. The Compose profile `noah` runs:
 
-- **Mosquitto** on the internal `pv` network
-- **noah-mqtt** (`ghcr.io/mtrossbach/noah-mqtt`) which polls Growatt and publishes JSON to `noah2mqtt/{serial}` (field `soc`)
+- **Mosquitto** on the `mqtt` network, which is `internal` (no route out of the host)
+- **noah-mqtt** (`ghcr.io/mtrossbach/noah-mqtt`) which polls Growatt and publishes JSON to `noah2mqtt/{serial}` (field `soc`). It is also on the `egress` network to reach the Growatt cloud.
 
 The Growatt credentials go into a separate `.env.noah` on the server, which only the `noah-mqtt` container reads. Never put them in `.env`: the dashboard container loads all of `.env`, and `deploy.sh` refuses to deploy if they are there.
 
+The broker requires a login. noah-mqtt also accepts commands on `noah2mqtt/{serial}/parameters/set` (charge/discharge limits, output power), so the ACL in `deploy/mosquitto/acl` gives the `noah` account read/write and the `dashboard` account read-only access. Set one password per account; `deploy.sh` refuses to deploy the `noah` profile without them and writes them to `.env.mosquitto` for the broker, which hashes them at startup.
+
 ```bash
 cp .env.noah.example .env.noah && chmod 600 .env.noah
+echo "MQTT_PASSWORD=$(openssl rand -hex 24)" >> .env.noah
+echo "NOAH_MQTT_PASSWORD=$(openssl rand -hex 24)" >> .env
 ```
 
 ```env
 # .env.noah
 GROWATT_USERNAME=your-growatt-user
 GROWATT_PASSWORD=your-growatt-password
+MQTT_PASSWORD=…
 ```
 
 ```env
@@ -210,6 +217,7 @@ GROWATT_PASSWORD=your-growatt-password
 GROWATT_API_MODE=web
 NOAH_MQTT_URL=mqtt://mosquitto:1883
 NOAH_MQTT_TOPIC=noah2mqtt/+
+NOAH_MQTT_PASSWORD=…
 ```
 
 Both sidecar images (`eclipse-mosquitto`, `noah-mqtt`) are pinned by digest in `docker-compose.yml`. To update, look up the new tag's digest and change it there deliberately.
@@ -302,13 +310,3 @@ Docker mounts `./config` into the container; edits are picked up on the next req
 
 Phase 2 (later): target %-position via `Cover.GoToPosition`.
 
-## Roadmap
-
-1. ~~Scaffold~~
-2. ~~UI with dummy data + theme~~
-3. ~~Shelly LAN adapter~~ (pair BTHome devices on the Plugs, then set MACs)
-4. ~~Open-Meteo + BVG + cache TTLs~~
-5. ~~RPC password, offline states, polish~~
-6. ~~Photovoltaik tab + Pro 3EM / EZ1-M / noah-mqtt adapters~~
-7. Deploy to `rrs37b.mewes-im-netz.de`
-8. ~~Smarthome tab (Cover groups + Plug S)~~ — %-position later
