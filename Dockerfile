@@ -1,9 +1,8 @@
 # Multi-stage build for Next.js standalone output.
 # Builds on the server (no image registry). See docker-compose.yml / deploy.sh.
 
-ARG NODE_VERSION=22-bookworm-slim
-
-FROM node:${NODE_VERSION} AS dependencies
+# Base image pinned by digest in all three stages; Dependabot bumps them together.
+FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
 # Retries help on flaky server→registry links (ETIMEDOUT during npm ci).
@@ -13,7 +12,7 @@ RUN --mount=type=cache,target=/root/.npm \
     --fetch-retry-mintimeout=20000 \
     --fetch-retry-maxtimeout=120000
 
-FROM node:${NODE_VERSION} AS builder
+FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS builder
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
@@ -26,7 +25,7 @@ RUN BT="${BUILD_TIME}" \
   && echo "Build version: $BT" \
   && NEXT_PUBLIC_BUILD_TIME="$BT" npm run build
 
-FROM node:${NODE_VERSION} AS runner
+FROM node:22.23.4-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1

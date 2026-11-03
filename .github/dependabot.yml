@@ -11,6 +11,21 @@ updates:
     commit-message:
       prefix: "chore(docker)"
 
+  # Digest-pinned Node base image in the Dockerfile. Node majors are moved
+  # deliberately (also update node-version in ci.yml).
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/Berlin"
+    ignore:
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
+    commit-message:
+      prefix: "chore(docker)"
+
   # SHA-pinned actions in .github/workflows (appleboy/ssh-action).
   - package-ecosystem: "github-actions"
     directory: "/"
