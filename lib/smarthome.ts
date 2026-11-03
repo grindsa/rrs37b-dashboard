@@ -1,6 +1,7 @@
 import { cacheDelete, cacheGetOrSet, CACHE_TTL } from "./cache";
 import { shellyRpc, ShellyRpcError } from "./shelly-rpc";
 import { takeControlSlot } from "./control-throttle";
+import { getTapoPlugOn, setTapoPlugOn, TapoPlugError } from "./tapo-plug";
 import {
   findCover,
   findGroup,
@@ -155,10 +156,23 @@ async function readCoverStatus(
   }
 }
 
+function plugErrorMessage(error: unknown): string {
+  if (error instanceof ShellyRpcError || error instanceof TapoPlugError) {
+    return error.message;
+  }
+  if (error instanceof Error) return error.message;
+  return "Plug nicht erreichbar";
+}
+
 async function readPlugStatus(
   plug: SmarthomePlugConfig,
 ): Promise<PlugDeviceStatus> {
   try {
+    if (plug.vendor === "tapo") {
+      const on = await getTapoPlugOn(plug.ip);
+      return { id: plug.id, name: plug.name, online: true, on };
+    }
+
     const status = await shellyRpc<ShellySwitchStatus>(
       plug.ip,
       "Switch.GetStatus",
@@ -176,12 +190,7 @@ async function readPlugStatus(
       name: plug.name,
       online: false,
       on: null,
-      error:
-        error instanceof ShellyRpcError
-          ? error.message
-          : error instanceof Error
-            ? error.message
-            : "Plug nicht erreichbar",
+      error: plugErrorMessage(error),
     };
   }
 }
@@ -378,7 +387,11 @@ export async function runPlugSet(
   takeControlSlot([`plug:${plug.id}`]);
 
   try {
-    await shellyRpc(plug.ip, "Switch.Set", { id: plug.switchId, on });
+    if (plug.vendor === "tapo") {
+      await setTapoPlugOn(plug.ip, on);
+    } else {
+      await shellyRpc(plug.ip, "Switch.Set", { id: plug.switchId, on });
+    }
     invalidateSmarthomeStatusCache();
     return { plugId, on, result: { id: plug.id, ok: true } };
   } catch (error) {
@@ -389,8 +402,7 @@ export async function runPlugSet(
       result: {
         id: plug.id,
         ok: false,
-        error:
-          error instanceof Error ? error.message : "Plug-Befehl fehlgeschlagen",
+        error: plugErrorMessage(error),
       },
     };
   }

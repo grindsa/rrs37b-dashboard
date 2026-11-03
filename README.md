@@ -93,6 +93,7 @@ See `.env.example`. Never commit `.env` (repo is public).
 | `ACCESS_TOKENS` | Comma-separated unlock codes, max 5, each ≥ 24 characters (shorter ones are ignored). Removing a code logs out the devices that used it |
 | `SESSION_EPOCH` | Optional. Change to any new value to log out every device. Sessions last 14 days since last use |
 | `SHELLY_RPC_PASSWORD` | Fallback RPC password for Shelly devices without `password` in the YAML |
+| `TAPO_EMAIL` / `TAPO_PASSWORD` | Tapo app account for plugs with `vendor: tapo` (local KLAP handshake only). On firmware ≥1.4 enable **Third-Party Compatibility** in the app (Me → Third-Party Services); toggle off/on if handshake still returns 403 |
 | `SMARTHOME_CONFIG_FILE` | Optional path to Smarthome YAML (default `config/smarthome.yml`) |
 | `OPEN_METEO_LAT` / `LON` | Fixed coords for 37B (`52.565379` / `13.441779`) |
 | `BVG_STOP_*` | Stop IDs/labels; 1+2 = default two-column Zuhause, 3+ = picker options |
@@ -109,8 +110,9 @@ app/                 # UI + route handlers
 components/
 lib/
   shelly.ts          # LAN RPC → BLU sensors
-  smarthome.ts       # Cover / Plug S status + control
+  smarthome.ts       # Cover / plug status + control
   smarthome-config.ts
+  tapo-plug.ts       # Tapo P100 local KLAP (vendor: tapo)
   pv.ts              # Photovoltaik orchestrator
   pv-shelly-em.ts    # Pro 3EM house W
   pv-ez1.ts          # EZ1-M solar W
@@ -245,9 +247,9 @@ NOAH_MQTT_TOPIC=noah2mqtt/0ABC00AA15AA00AA
 Tab **Smarthome** (session required, same unlock as the rest of the dashboard):
 
 - Roller shutters (Shelly 2PM Cover) grouped by floor — ↑ / ↓ controls (active direction becomes pause/stop while moving)
-- One or more Shelly Plug S toggles
+- Plug toggles (Shelly Plug S and/or Tapo P100)
 
-All Shelly traffic is server-side (`lib/smarthome.ts` → `shellyRpc`). The browser never sees device IPs in control requests — only config ids (`groupId` / `coverId` / `plugId`).
+Device traffic is server-side (`lib/smarthome.ts` → Shelly RPC or Tapo KLAP). The browser never sees device IPs in control requests — only config ids (`groupId` / `coverId` / `plugId`).
 
 | Endpoint | Purpose |
 |----------|---------|
@@ -260,7 +262,7 @@ Control commands always hit devices live and invalidate the status cache. Withou
 
 ### Config (YAML file)
 
-All Shelly devices live in YAML (not `.env`): shutter groups, covers, plugs, the BLE gateways, BLU sensors and the Pro 3EM.
+Devices live in YAML (not `.env`): shutter groups, covers, plugs, the BLE gateways, BLU sensors and the Pro 3EM.
 
 ```bash
 cp config/smarthome.example.yml config/smarthome.yml
@@ -284,11 +286,15 @@ plugs:
   - id: plug-1
     name: Shelly Plug S
     ip: 192.168.x.x
-    switchId: 0
+    switchId: 0          # vendor: shelly is the default
+  - id: tapo-1
+    name: Tapo P100
+    ip: 192.168.x.x
+    vendor: tapo         # uses TAPO_EMAIL / TAPO_PASSWORD
   - id: gw-wohnzimmer
     name: Gateway Wohnzimmer
     ip: 192.168.x.x
-    hidden: true         # not shown, not switchable
+    hidden: true         # Shelly BLE gateway — not shown, not switchable
 sensors:
   - label: Wohnzimmer    # Aussen | Arbeitszimmer | Wohnzimmer
     gateway: gw-wohnzimmer
@@ -301,7 +307,8 @@ meters:
 
 - `id` values must be unique within each list; sensor labels must be unique.
 - `coverId` / `switchId` / `emId` default to `0` when omitted.
-- `password` is optional on covers, plugs and meters. Without it, `SHELLY_RPC_PASSWORD` is used; the server log lists which devices still fall back. Entries sharing an IP must not have different passwords.
+- Plug `vendor` is `shelly` (default) or `tapo`. Sensor `gateway` plugs must be Shelly (Tapo as gateway is a config error).
+- `password` is optional on Shelly covers, plugs and meters. Without it, `SHELLY_RPC_PASSWORD` is used; the server log lists which devices still fall back. Entries sharing an IP must not have different passwords. Do not set `password` on Tapo plugs.
 - Groups without covers are not shown. Unknown `group` or `gateway` references are config errors.
 - Optional path override: `SMARTHOME_CONFIG_FILE` (Compose sets `/app/config/smarthome.yml`).
 - If the live file is missing, the tab shows `config/smarthome.example.yml` (no LAN probes; control, sensors and Hausverbrauch disabled).

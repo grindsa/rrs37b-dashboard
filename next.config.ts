@@ -36,6 +36,8 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  // Native/axios KLAP client — keep out of the Turbopack/webpack graph.
+  serverExternalPackages: ["tp-link-tapo-connect"],
   // Allow opening the dev server via 127.0.0.1 (not only localhost)
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   async headers() {

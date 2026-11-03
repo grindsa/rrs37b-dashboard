@@ -53,13 +53,20 @@ covers:
     coverId: 0
     group: eg
 
-# Shelly Plug S. `hidden: true` (default false) keeps a plug out of the
-# Smarthome tab and blocks switching it — use it for BLE gateways.
+# Plugs. `vendor` is shelly (default) or tapo. Shelly uses `switchId` + optional
+# `password` (else SHELLY_RPC_PASSWORD). Tapo uses TAPO_EMAIL / TAPO_PASSWORD
+# from .env (local KLAP to `ip`); do not set `password` on Tapo entries.
+# `hidden: true` keeps a plug out of the Smarthome tab — use it for Shelly BLE
+# gateways only (Tapo cannot be a sensor gateway).
 plugs:
   - id: plug-1
     name: Shelly Plug S
     ip: 192.168.0.130
     switchId: 0
+  - id: tapo-1
+    name: Tapo P100
+    ip: 192.168.0.140
+    vendor: tapo
   - id: gw-aussen-arbeit
     name: Gateway Außen/Arbeitszimmer
     ip: 192.168.0.10

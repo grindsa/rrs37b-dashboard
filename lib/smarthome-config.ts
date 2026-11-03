@@ -1,8 +1,8 @@
 /**
- * Shelly device inventory from a YAML file: cover groups, covers, plugs,
- * BLU sensors (via gateway plugs) and energy meters.
- * Device identity is IP + component id. A device without `password` uses
- * SHELLY_RPC_PASSWORD from env.
+ * Smarthome device inventory from a YAML file: cover groups, covers, plugs
+ * (Shelly or Tapo), BLU sensors (via Shelly gateway plugs) and energy meters.
+ * Shelly devices without `password` use SHELLY_RPC_PASSWORD from env.
+ * Tapo plugs use TAPO_EMAIL / TAPO_PASSWORD from env (local KLAP).
  */
 
 import { existsSync, readFileSync, statSync } from "node:fs";
@@ -29,14 +29,20 @@ export type SmarthomeGroupConfig = {
   covers: SmarthomeCoverConfig[];
 };
 
+export const PLUG_VENDORS = ["shelly", "tapo"] as const;
+export type PlugVendor = (typeof PLUG_VENDORS)[number];
+
 export type SmarthomePlugConfig = {
   id: string;
   name: string;
   ip: string;
-  /** Shelly Switch component id (usually 0). */
+  /** shelly (default) or tapo. */
+  vendor: PlugVendor;
+  /** Shelly Switch component id (usually 0). Ignored for Tapo. */
   switchId: number;
   /** Hidden plugs are never listed or switchable via the API. */
   hidden: boolean;
+  /** Shelly RPC password only; ignored for Tapo (use TAPO_* env). */
   password?: string;
 };
 
@@ -220,15 +226,34 @@ function parseCover(
   };
 }
 
+function asPlugVendor(value: unknown, pathLabel: string): PlugVendor {
+  if (value === undefined || value === null || value === "") return "shelly";
+  const vendor = asString(value, pathLabel).toLowerCase();
+  if ((PLUG_VENDORS as readonly string[]).includes(vendor)) {
+    return vendor as PlugVendor;
+  }
+  throw new Error(
+    `${ERR_PREFIX}: ${pathLabel} must be one of ${PLUG_VENDORS.join(", ")}`,
+  );
+}
+
 function parsePlug(raw: unknown, pathLabel: string): SmarthomePlugConfig {
   const obj = asRecord(raw, pathLabel);
+  const vendor = asPlugVendor(obj.vendor, `${pathLabel}.vendor`);
+  const password = asOptionalPassword(obj.password, `${pathLabel}.password`);
+  if (vendor === "tapo" && password) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.password is Shelly-only — Tapo uses TAPO_EMAIL / TAPO_PASSWORD`,
+    );
+  }
   return {
     id: asString(obj.id, `${pathLabel}.id`),
     name: asString(obj.name, `${pathLabel}.name`),
     ip: asIp(obj.ip, `${pathLabel}.ip`),
+    vendor,
     switchId: asComponentId(obj.switchId, `${pathLabel}.switchId`),
     hidden: asOptionalBoolean(obj.hidden, `${pathLabel}.hidden`),
-    password: asOptionalPassword(obj.password, `${pathLabel}.password`),
+    password,
   };
 }
 
@@ -243,6 +268,11 @@ function parseSensor(
   if (!gateway) {
     throw new Error(
       `${ERR_PREFIX}: ${pathLabel}.gateway "${gatewayId}" is not defined under plugs`,
+    );
+  }
+  if (gateway.vendor !== "shelly") {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.gateway "${gatewayId}" must be vendor shelly (got ${gateway.vendor}) — BLU gateways cannot be Tapo`,
     );
   }
   return {
@@ -316,8 +346,12 @@ function parseConfig(parsed: unknown): ParseResult {
   );
   assertUnique(meters.map((m) => m.id), "meter id");
 
-  const devices: PasswordDevice[] = [...covers, ...plugs, ...meters];
-  const passwordsByIp = buildPasswordMap(devices);
+  const shellyPasswordDevices: PasswordDevice[] = [
+    ...covers,
+    ...plugs.filter((p) => p.vendor === "shelly"),
+    ...meters,
+  ];
+  const passwordsByIp = buildPasswordMap(shellyPasswordDevices);
 
   const notes: string[] = [];
   const groups: SmarthomeGroupConfig[] = [];
@@ -330,11 +364,30 @@ function parseConfig(parsed: unknown): ParseResult {
     groups.push({ ...def, covers: groupCovers });
   }
 
-  const usingFallback = devices
+  for (const plug of plugs) {
+    if (plug.vendor === "tapo" && plug.hidden) {
+      notes.push(
+        `warning: plug "${plug.id}" is vendor tapo with hidden: true — Tapo plugs cannot be BLU gateways`,
+      );
+    }
+  }
+
+  const usingFallback = shellyPasswordDevices
     .filter((d) => !passwordsByIp.has(d.ip))
     .map((d) => d.id);
   if (usingFallback.length > 0) {
     notes.push(`using SHELLY_RPC_PASSWORD for: ${usingFallback.join(", ")}`);
+  }
+
+  const tapoPlugs = plugs.filter((p) => p.vendor === "tapo");
+  if (tapoPlugs.length > 0) {
+    const email = process.env.TAPO_EMAIL?.trim();
+    const password = process.env.TAPO_PASSWORD?.trim();
+    if (!email || !password) {
+      notes.push(
+        `Tapo plugs configured (${tapoPlugs.map((p) => p.id).join(", ")}) but TAPO_EMAIL / TAPO_PASSWORD missing`,
+      );
+    }
   }
 
   return {
