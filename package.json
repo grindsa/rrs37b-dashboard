@@ -28,6 +28,7 @@
     "typescript": "^7"
   },
   "overrides": {
-    "axios": "0.35.0"
+    "axios": "0.35.0",
+    "minimatch": "11.0.1"
   }
 }
