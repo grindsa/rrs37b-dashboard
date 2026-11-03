@@ -8,7 +8,7 @@ import type {
   SmarthomeGroupStatus,
   SmarthomeSnapshot,
 } from "@/lib/smarthome";
-import { onForeground } from "@/lib/foreground-refresh";
+import { isPageHidden, onForeground } from "@/lib/foreground-refresh";
 import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 
 const POLL_IDLE_MS = 30_000;
@@ -602,6 +602,10 @@ export function SmarthomeSection({
       const delay =
         anyMovingRef.current || hasOverride ? POLL_MOVING_MS : POLL_IDLE_MS;
       timer = window.setTimeout(() => {
+        if (isPageHidden()) {
+          scheduleNext();
+          return;
+        }
         void load().finally(() => {
           if (!cancelled) scheduleNext();
         });

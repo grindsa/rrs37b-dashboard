@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { PvSnapshot } from "@/lib/pv";
 import { formatRelativeAge } from "@/lib/format";
-import { onForeground } from "@/lib/foreground-refresh";
+import { isPageHidden, onForeground } from "@/lib/foreground-refresh";
 import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 
 const POLL_MS = 30_000;
@@ -106,7 +106,9 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
     }
 
     if (!initialData) void load();
-    const id = window.setInterval(() => void load(), POLL_MS);
+    const id = window.setInterval(() => {
+      if (!isPageHidden()) void load();
+    }, POLL_MS);
     const stopFg = onForeground(() => void load());
     return () => {
       cancelled = true;

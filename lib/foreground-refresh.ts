@@ -1,4 +1,12 @@
 /**
+ * Polls skip while the tab is in the background; `onForeground` reloads on
+ * return, so the data is fresh as soon as the page is visible again.
+ */
+export function isPageHidden(): boolean {
+  return document.visibilityState === "hidden";
+}
+
+/**
  * Run `callback` when the page becomes visible again (home-screen / tab resume).
  * Debounced so visibilitychange + focus + pageshow don't triple-fetch.
  */

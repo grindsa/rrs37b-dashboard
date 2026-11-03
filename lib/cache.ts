@@ -50,6 +50,9 @@ export function cacheDelete(key: string): void {
   store.delete(key);
 }
 
+/** Concurrent misses share one load, so devices see a single round. */
+const inflight = new Map<string, Promise<unknown>>();
+
 export async function cacheGetOrSet<T>(
   key: string,
   ttlMs: number,
@@ -57,9 +60,21 @@ export async function cacheGetOrSet<T>(
 ): Promise<T> {
   const hit = cacheGet<T>(key);
   if (hit !== undefined) return hit;
-  const value = await loader();
-  cacheSet(key, value, ttlMs);
-  return value;
+
+  const pending = inflight.get(key);
+  if (pending) return pending as Promise<T>;
+
+  const load = (async () => {
+    try {
+      const value = await loader();
+      cacheSet(key, value, ttlMs);
+      return value;
+    } finally {
+      inflight.delete(key);
+    }
+  })();
+  inflight.set(key, load);
+  return load;
 }
 
 /** Suggested TTLs from the handover (ms). */

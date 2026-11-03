@@ -8,7 +8,7 @@ import {
   formatTemp,
   weatherLabel,
 } from "@/lib/format";
-import { onForeground } from "@/lib/foreground-refresh";
+import { isPageHidden, onForeground } from "@/lib/foreground-refresh";
 import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 import { WeatherIcon } from "./WeatherIcon";
 
@@ -98,7 +98,9 @@ export function WeatherSection({
     }
 
     if (!initialData) void load();
-    const id = window.setInterval(() => void load(), POLL_MS);
+    const id = window.setInterval(() => {
+      if (!isPageHidden()) void load();
+    }, POLL_MS);
     const stopFg = onForeground(() => void load());
     return () => {
       cancelled = true;

@@ -8,7 +8,7 @@ import {
   formatRelativeAge,
   formatTemp,
 } from "@/lib/format";
-import { onForeground } from "@/lib/foreground-refresh";
+import { isPageHidden, onForeground } from "@/lib/foreground-refresh";
 import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 
 const POLL_MS = 45_000;
@@ -160,7 +160,9 @@ export function SensorsSection({
 
     // Initial data already came from the server — poll only after the first interval.
     if (!initialData) void load();
-    const id = window.setInterval(() => void load(), POLL_MS);
+    const id = window.setInterval(() => {
+      if (!isPageHidden()) void load();
+    }, POLL_MS);
     const stopFg = onForeground(() => void load());
     return () => {
       cancelled = true;
