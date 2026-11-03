@@ -1,8 +1,9 @@
 import { connection } from "next/server";
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/with-auth";
 import { getBvgDepartures } from "@/lib/bvg";
 
-export async function GET(request: Request) {
+export const GET = withAuth(async function GET(request: Request) {
   await connection();
 
   const { searchParams } = new URL(request.url);
@@ -27,4 +28,4 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
-}
+});

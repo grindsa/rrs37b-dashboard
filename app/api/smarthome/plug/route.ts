@@ -1,9 +1,10 @@
 import { connection } from "next/server";
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/with-auth";
 import { readJsonBody } from "@/lib/request-guard";
 import { runPlugSet } from "@/lib/smarthome";
 
-export async function POST(request: Request) {
+export const POST = withAuth(async function POST(request: Request) {
   await connection();
 
   const parsed = await readJsonBody(request);
@@ -40,4 +41,4 @@ export async function POST(request: Request) {
     const status = message.startsWith("Unbekannter") ? 404 : 400;
     return NextResponse.json({ error: message }, { status });
   }
-}
+});

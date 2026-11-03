@@ -96,7 +96,7 @@ See `.env.example`. Never commit `.env` (repo is public).
 | `BVG_STOP_*` | Stop IDs/labels; 1+2 = default two-column Zuhause, 3+ = picker options |
 | `APSYSTEMS_EZ1_HOST` | EZ1-M LAN IP — solar production (`p1 + p2`) |
 | `NOAH_MQTT_URL` | MQTT broker for NOAH SoC (e.g. `mqtt://mosquitto:1883`) |
-| `GROWATT_USERNAME` / `PASSWORD` | Growatt account for noah-mqtt (server `.env` only) |
+| `GROWATT_USERNAME` / `PASSWORD` | Growatt account for noah-mqtt — in `.env.noah`, never `.env` |
 
 ## Repo layout
 
@@ -193,16 +193,26 @@ NOAH has no clean local API. The Compose profile `noah` runs:
 - **Mosquitto** on the internal `pv` network
 - **noah-mqtt** (`ghcr.io/mtrossbach/noah-mqtt`) which polls Growatt and publishes JSON to `noah2mqtt/{serial}` (field `soc`)
 
-On the server `.env` (never commit):
+The Growatt credentials go into a separate `.env.noah` on the server, which only the `noah-mqtt` container reads. Never put them in `.env`: the dashboard container loads all of `.env`, and `deploy.sh` refuses to deploy if they are there.
+
+```bash
+cp .env.noah.example .env.noah && chmod 600 .env.noah
+```
 
 ```env
+# .env.noah
 GROWATT_USERNAME=your-growatt-user
 GROWATT_PASSWORD=your-growatt-password
-GROWATT_API_MODE=web
+```
 
+```env
+# .env
+GROWATT_API_MODE=web
 NOAH_MQTT_URL=mqtt://mosquitto:1883
 NOAH_MQTT_TOPIC=noah2mqtt/+
 ```
+
+Both sidecar images (`eclipse-mosquitto`, `noah-mqtt`) are pinned by digest in `docker-compose.yml`. To update, look up the new tag's digest and change it there deliberately.
 
 Redeploy:
 
@@ -212,7 +222,7 @@ Redeploy:
 # COMPOSE_PROFILES=noah docker compose up -d
 ```
 
-`deploy.sh` turns on profile `noah` automatically when `GROWATT_USERNAME` is set. The dashboard keeps a short-lived MQTT subscriber in-process and reads appliance SoC (plus charge/discharge W when present).
+`deploy.sh` turns on profile `noah` automatically when `GROWATT_USERNAME` is set in `.env.noah`. The dashboard keeps a short-lived MQTT subscriber in-process and reads appliance SoC (plus charge/discharge W when present).
 
 Pin a single device if you have several:
 

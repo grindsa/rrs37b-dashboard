@@ -27,10 +27,11 @@ services:
       - "3000"
 
   # Optional Growatt bridge stack — enable with Compose profile `noah`
-  # (deploy.sh enables it automatically when GROWATT_USERNAME is set).
+  # (deploy.sh enables it automatically when .env.noah sets GROWATT_USERNAME).
   mosquitto:
     profiles: ["noah"]
-    image: eclipse-mosquitto:2
+    # Pinned by digest; bump deliberately (tag kept for readability).
+    image: eclipse-mosquitto:2.1.2-alpine@sha256:860aeb5d63ce509508f6dcfb2bc8a1c1dd2bc60555b562b45ce90e52d8dabb0f
     container_name: rrs37-mosquitto
     restart: unless-stopped
     volumes:
@@ -41,13 +42,16 @@ services:
 
   noah-mqtt:
     profiles: ["noah"]
-    image: ghcr.io/mtrossbach/noah-mqtt:latest
+    # Pinned by digest; it receives the Growatt credentials, so bump deliberately.
+    image: ghcr.io/mtrossbach/noah-mqtt:0.0.29@sha256:a4f61777b82187da956b91495f64294c26da4fda02cc86549cec188a2d130876
     container_name: rrs37-noah-mqtt
     restart: unless-stopped
+    # GROWATT_USERNAME / GROWATT_PASSWORD live only here, never in .env,
+    # so the dashboard container never sees them.
+    env_file:
+      - path: .env.noah
+        required: false
     environment:
-      # Required when profile `noah` is enabled (deploy.sh checks GROWATT_USERNAME).
-      GROWATT_USERNAME: ${GROWATT_USERNAME:-}
-      GROWATT_PASSWORD: ${GROWATT_PASSWORD:-}
       GROWATT_API_MODE: ${GROWATT_API_MODE:-web}
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883

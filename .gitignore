@@ -33,6 +33,7 @@ yarn-error.log*
 # env files (never commit secrets; keep .env.example)
 .env*
 !.env.example
+!.env.noah.example
 
 # Live Smarthome inventory (LAN IPs) — keep the example committed
 /config/smarthome.yml

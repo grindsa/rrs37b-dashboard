@@ -87,9 +87,11 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    // Every API path, whatever its extension.
+    "/api/:path*",
     /*
-     * Match all paths except static assets / Next internals / common icons.
+     * Pages: all paths except static assets / Next internals / common icons.
      */
-    "/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!api/|_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

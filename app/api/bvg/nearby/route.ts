@@ -1,8 +1,9 @@
 import { connection } from "next/server";
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/with-auth";
 import { getHouseCoords, getNearestStop } from "@/lib/bvg";
 
-export async function GET(request: Request) {
+export const GET = withAuth(async function GET(request: Request) {
   await connection();
 
   const { searchParams } = new URL(request.url);
@@ -42,4 +43,4 @@ export async function GET(request: Request) {
       error instanceof Error ? error.message : "Failed to find nearby stop";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

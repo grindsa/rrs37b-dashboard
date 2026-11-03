@@ -41,9 +41,16 @@ fi
 BUILD_TIME="$(TZ=Europe/Berlin date +%Y-%m-%d-%H-%M-%S)"
 export BUILD_TIME
 
-# Enable Growatt NOAH bridge sidecars when credentials are present in .env.
+# Growatt credentials must not reach the dashboard container (env_file .env).
+if grep -qE '^[[:space:]]*GROWATT_(USERNAME|PASSWORD)=[^[:space:]#]+' .env; then
+  echo "ERROR: GROWATT_USERNAME/GROWATT_PASSWORD found in .env — move them to .env.noah (see .env.noah.example)." >&2
+  exit 1
+fi
+
+# Enable Growatt NOAH bridge sidecars when credentials are present in .env.noah.
 COMPOSE_PROFILES="${COMPOSE_PROFILES:-}"
-if [[ -z "${COMPOSE_PROFILES}" ]] && grep -qE '^[[:space:]]*GROWATT_USERNAME=[^[:space:]#]+' .env; then
+if [[ -z "${COMPOSE_PROFILES}" ]] && [[ -f .env.noah ]] \
+  && grep -qE '^[[:space:]]*GROWATT_USERNAME=[^[:space:]#]+' .env.noah; then
   COMPOSE_PROFILES="noah"
 fi
 if [[ -n "${COMPOSE_PROFILES}" ]]; then

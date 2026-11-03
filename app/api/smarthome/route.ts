@@ -1,8 +1,9 @@
 import { connection } from "next/server";
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/with-auth";
 import { getSmarthomeSnapshot } from "@/lib/smarthome";
 
-export async function GET() {
+export const GET = withAuth(async function GET() {
   await connection();
 
   try {
@@ -26,4 +27,4 @@ export async function GET() {
       { status: 500 },
     );
   }
-}
+});

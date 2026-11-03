@@ -1,5 +1,6 @@
 import { connection } from "next/server";
 import { NextResponse } from "next/server";
+import { withAuth } from "@/lib/with-auth";
 import { discoverBthomeDevices } from "@/lib/shelly";
 import { getShellyBindings, uniqueGatewayIps } from "@/lib/shelly-config";
 
@@ -7,7 +8,7 @@ import { getShellyBindings, uniqueGatewayIps } from "@/lib/shelly-config";
  * Lists BTHome devices currently paired on the configured gateway plugs.
  * Use this once to fill the sensor `mac` values in config/smarthome.yml.
  */
-export async function GET() {
+export const GET = withAuth(async function GET() {
   await connection();
 
   try {
@@ -27,4 +28,4 @@ export async function GET() {
       error instanceof Error ? error.message : "Discovery failed";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
