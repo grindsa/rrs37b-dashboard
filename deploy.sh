@@ -20,22 +20,27 @@ if [[ ! -f .env ]]; then
 fi
 
 # Live inventory is bind-mounted; without it the UI has no devices.
-# Ensure the directory is traversable by the container user (node, uid 1000).
+# Container user is node (uid 1000). Host group "docker" is NOT 1000, so a
+# 640 github:docker file is unreadable inside the container (EACCES).
 mkdir -p config
-chmod 755 config || true
+chmod 755 config
 if [[ ! -f config/smarthome.yml ]]; then
   cat >&2 <<'MSG'
 ERROR: missing config/smarthome.yml (gitignored — not restored by git pull).
 Restore it from backup, or:
   cp config/smarthome.example.yml config/smarthome.yml
   $EDITOR config/smarthome.yml
-Then: chown "$(id -u)":1000 config/smarthome.yml && chmod 640 config/smarthome.yml
 MSG
   exit 1
 fi
-# Container runs as uid 1000; group-read is enough if the dir is world-executable.
-chown "$(id -u)":1000 config/smarthome.yml 2>/dev/null || true
-chmod 640 config/smarthome.yml || true
+# Prefer owner:1000 + 640. chown to gid 1000 often needs sudo — fall back to
+# 644 (host tree is typically 770, so other host users still can't reach it).
+if chown "$(id -u)":1000 config/smarthome.yml 2>/dev/null; then
+  chmod 640 config/smarthome.yml
+else
+  chmod 644 config/smarthome.yml
+  echo "Note: could not chown config/smarthome.yml to :1000 — using chmod 644 so the container can read it." >&2
+fi
 
 BRANCH="${DEPLOY_BRANCH:-main}"
 
