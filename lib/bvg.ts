@@ -59,7 +59,7 @@ type BvgNearbyApiItem = {
   distance?: number;
 };
 
-const USER_AGENT = "rrs37-dashboard/0.1";
+const USER_AGENT = "rrs37b-dashboard/0.1";
 
 export function getDurationMin(): number {
   const durationMin = Number(process.env.BVG_DURATION_MIN ?? "30");

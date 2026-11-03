@@ -129,7 +129,7 @@ function ensureSubscriber(url: string, topic: string): Promise<void> {
       reconnectPeriod: 5_000,
       username,
       password,
-      clientId: `rrs37-dashboard-${process.pid}`,
+      clientId: `rrs37b-dashboard-${process.pid}`,
     });
     client = next;
 

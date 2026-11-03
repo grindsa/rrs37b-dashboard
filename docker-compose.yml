@@ -1,14 +1,14 @@
 services:
-  rrs37-dashboard:
+  rrs37b-dashboard:
     build:
       context: .
       dockerfile: Dockerfile
       args:
         BUILD_TIME: ${BUILD_TIME:-}
-    image: rrs37-dashboard:local
-    container_name: rrs37-dashboard
+    image: rrs37b-dashboard:local
+    container_name: rrs37b-dashboard
     restart: unless-stopped
-    # Reachable from the host reverse proxy as rrs37-dashboard:3000
+    # Reachable from the host reverse proxy as rrs37b-dashboard:3000
     # on the shared external Docker network `proxy`.
     env_file:
       - .env
@@ -44,7 +44,7 @@ services:
     profiles: ["noah"]
     # Pinned by digest; bump deliberately (tag kept for readability).
     image: eclipse-mosquitto:2.1.2-alpine@sha256:860aeb5d63ce509508f6dcfb2bc8a1c1dd2bc60555b562b45ce90e52d8dabb0f
-    container_name: rrs37-mosquitto
+    container_name: rrs37b-mosquitto
     restart: unless-stopped
     volumes:
       - ./deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
@@ -84,7 +84,7 @@ services:
     profiles: ["noah"]
     # Pinned by digest; it receives the Growatt credentials, so bump deliberately.
     image: ghcr.io/mtrossbach/noah-mqtt:0.0.29@sha256:a4f61777b82187da956b91495f64294c26da4fda02cc86549cec188a2d130876
-    container_name: rrs37-noah-mqtt
+    container_name: rrs37b-noah-mqtt
     restart: unless-stopped
     # GROWATT_USERNAME / GROWATT_PASSWORD and MQTT_PASSWORD live only here,
     # never in .env, so the dashboard container never sees them.

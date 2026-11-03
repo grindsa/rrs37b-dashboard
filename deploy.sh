@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Deploy RRS37-Dashboard on the webserver.
-# Expected location: /srv/stacks/rrs37-dashboard
+# Expected location: /srv/stacks/rrs37b-dashboard
 # Usage (on the server): ./deploy.sh
 # Prerequisites: git remote configured, Docker + Compose installed, .env present.
 
@@ -113,8 +113,8 @@ echo "==> Status"
 docker compose ps
 
 # Refuse a "successful" deploy if the app container is not running.
-if ! docker compose ps --status running --services | grep -qx 'rrs37-dashboard'; then
-  echo "ERROR: rrs37-dashboard container is not running after deploy" >&2
+if ! docker compose ps --status running --services | grep -qx 'rrs37b-dashboard'; then
+  echo "ERROR: rrs37b-dashboard container is not running after deploy" >&2
   docker compose ps >&2 || true
   exit 1
 fi

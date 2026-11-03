@@ -22,15 +22,15 @@ Open [http://127.0.0.1:3000](http://127.0.0.1:3000). The dev server only listens
 
 ## Production deploy
 
-Build runs **on the webserver** (no image registry). The app joins the existing external Docker network `proxy` and is reached as `rrs37-dashboard:3000` from the reverse-proxy stack.
+Build runs **on the webserver** (no image registry). The app joins the existing external Docker network `proxy` and is reached as `rrs37b-dashboard:3000` from the reverse-proxy stack.
 
 ### One-time setup on the server
 
-1. Install Docker + Compose, clone into `/srv/stacks/rrs37-dashboard`:
+1. Install Docker + Compose, clone into `/srv/stacks/rrs37b-dashboard`:
 
    ```bash
-   git clone git@github.com:YOU/RRS37-Dashboard.git /srv/stacks/rrs37-dashboard
-   cd /srv/stacks/rrs37-dashboard
+   git clone git@github.com:YOU/RRS37-Dashboard.git /srv/stacks/rrs37b-dashboard
+   cd /srv/stacks/rrs37b-dashboard
    ```
 
 2. Copy env and fill RPC password, lat/lon, BVG stops (and PV keys when ready). Shelly devices go into `config/smarthome.yml` (see [Config (YAML file)](#config-yaml-file)):
@@ -40,7 +40,7 @@ Build runs **on the webserver** (no image registry). The app joins the existing 
    $EDITOR .env
    ```
 
-3. Add the Caddy/nginx snippet and proxy env vars; upstream is `rrs37-dashboard:3000` on network `proxy`:
+3. Add the Caddy/nginx snippet and proxy env vars; upstream is `rrs37b-dashboard:3000` on network `proxy`:
 
    - Caddy: `docs/Caddyfile.example`
    - nginx: `docs/nginx.example.conf`
@@ -56,7 +56,7 @@ Push (or merge) to `main` — GitHub Actions SSHs into the server and runs `./de
 You can also deploy manually on the server:
 
 ```bash
-cd /srv/stacks/rrs37-dashboard
+cd /srv/stacks/rrs37b-dashboard
 ./deploy.sh
 ```
 
@@ -80,7 +80,7 @@ Add these **repository secrets**:
 One-time server notes:
 
 1. Install the matching **public** key in that user’s `~/.ssh/authorized_keys`.
-2. Ensure `/srv/stacks/rrs37-dashboard` can `git pull` from GitHub non-interactively.
+2. Ensure `/srv/stacks/rrs37b-dashboard` can `git pull` from GitHub non-interactively.
 3. User must be able to run `docker compose` (e.g. membership in the `docker` group).
 
 ## Environment

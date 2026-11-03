@@ -9,7 +9,7 @@
 
 	handle {
 		# Next.js streaming — avoid buffering
-		reverse_proxy {$RRS37_UPSTREAM:rrs37-dashboard:3000} {
+		reverse_proxy {$RRS37_UPSTREAM:rrs37b-dashboard:3000} {
 			flush_interval -1
 		}
 	}
