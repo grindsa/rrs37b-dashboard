@@ -694,9 +694,9 @@ function PlugRow({
         disabled={busy || !plug.online || unknown}
         onClick={() => onToggle(!checked)}
         className={[
-          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-accent transition-[box-shadow,opacity] duration-200 disabled:opacity-45",
+          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-accent transition-[box-shadow,opacity,background-color] duration-200 disabled:opacity-45",
           checked
-            ? "bg-background ring-2 ring-accent ring-offset-2 ring-offset-background"
+            ? "bg-accent text-background ring-2 ring-accent ring-offset-2 ring-offset-background"
             : "bg-surface",
         ].join(" ")}
       >
