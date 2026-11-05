@@ -1,6 +1,10 @@
 /**
  * Growatt NOAH 2000 SoC via noah-mqtt → local MQTT broker.
  * Keeps a process-level subscriber so retained messages are not required.
+ *
+ * noah-mqtt polls Growatt ~every 30s and publishes `status: "online"|"offline"`.
+ * We reject offline / stale readings so the dashboard does not keep showing
+ * the last SoC after WiFi drops.
  */
 
 import mqtt, { type MqttClient } from "mqtt";
@@ -27,6 +31,8 @@ type NoahPayload = {
 
 const CONNECT_TIMEOUT_MS = 5_000;
 const FIRST_MESSAGE_WAIT_MS = 12_000;
+/** noah-mqtt default poll is 30s; allow a few missed cycles + Growatt lag. */
+const STALE_AFTER_MS = 3 * 60_000;
 
 let client: MqttClient | null = null;
 let latest: NoahReading | null = null;
@@ -56,6 +62,27 @@ function envPassword(): string | undefined {
 
 function asFiniteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function isFresh(iso: string): boolean {
+  const ageMs = Date.now() - new Date(iso).getTime();
+  return Number.isFinite(ageMs) && ageMs <= STALE_AFTER_MS;
+}
+
+/** noah-mqtt sets status to "offline" when Growatt reports the appliance unreachable. */
+function isReportedOffline(status: string | null): boolean {
+  return typeof status === "string" && status.trim().toLowerCase() === "offline";
+}
+
+function assertUsableReading(reading: NoahReading): void {
+  if (isReportedOffline(reading.status)) {
+    throw new Error("NOAH Batterie offline (kein WLAN / Growatt)");
+  }
+  if (!isFresh(reading.updatedAt)) {
+    throw new Error(
+      "NOAH SoC veraltet — keine aktuelle MQTT-Meldung (läuft noah-mqtt?)",
+    );
+  }
 }
 
 function parsePayload(topic: string, raw: Buffer): NoahReading | null {
@@ -208,7 +235,8 @@ function waitForReading(timeoutMs: number): Promise<NoahReading | null> {
 
 /**
  * Returns latest NOAH reading from the MQTT bridge, or null if not configured.
- * Throws when configured but the broker / payload is unavailable.
+ * Throws when configured but the broker / payload is unavailable, offline,
+ * or older than the stale threshold (~3 minutes).
  */
 export async function fetchNoahReading(): Promise<NoahReading | null> {
   const url = envUrl();
@@ -218,10 +246,13 @@ export async function fetchNoahReading(): Promise<NoahReading | null> {
   await ensureSubscriber(url, topic);
 
   const reading = await waitForReading(FIRST_MESSAGE_WAIT_MS);
-  if (reading) return reading;
+  if (!reading) {
+    throw new Error(
+      lastError ??
+        `Keine NOAH-SoC Nachricht auf ${topic} — läuft noah-mqtt?`,
+    );
+  }
 
-  throw new Error(
-    lastError ??
-      `Keine NOAH-SoC Nachricht auf ${topic} — läuft noah-mqtt?`,
-  );
+  assertUsableReading(reading);
+  return reading;
 }
