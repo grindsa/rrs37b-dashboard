@@ -13,30 +13,23 @@
 # This file then holds secrets — keep it readable only by the deploy user and
 # the container user.
 
-# Groups shown in this order. Each group has a required `type`:
-#   covers — roller shutters (list under `covers` with group: <id>)
-#   lights — LEDVANCE / Tuya lamps (list under `lamps` with group: <id>)
-# Thermostats (Heizung tab) may reuse the same group id/name as covers.
-# Empty cover/light groups are hidden in Smarthome; Heizung still uses the
-# group label when thermostats are assigned to it.
+# Groups are untyped floors/rooms (id + name). Devices declare membership with
+# `group: <id>`. Each tab only shows groups that have matching devices:
+#   covers → Rollos, lamps → Lampen, thermostats → Heizung.
+# Fully empty groups are hidden everywhere they have no devices.
 groups:
   - id: dg
     name: Dachgeschoss
-    type: covers
   - id: og1
     name: 1. OG
-    type: covers
   - id: eg
     name: Erdgeschoss
-    type: covers
   - id: wohn
     name: Wohnbereich
-    type: lights
   - id: flur
     name: Flur & Küche
-    type: lights
 
-# Shelly 2PM covers. `group` (required) must match a group with type: covers.
+# Shelly 2PM covers. `group` (required) must match a groups[].id.
 covers:
   - id: dg-ost
     name: DG Ost
@@ -70,7 +63,7 @@ covers:
     coverId: 0
     group: eg
 
-# LEDVANCE Smart+ WiFi (Tuya local). `group` must match type: lights.
+# LEDVANCE Smart+ WiFi (Tuya local). `group` must match a groups[].id.
 # Obtain device_id + local_key via tuya-cli wizard, tinytuya wizard, or a
 # Ledvance/Smart+ key export script — keep Smart+ closed while controlling.
 # Defaults: on_percent 100, protocol "3.5". dim_percent is optional —
@@ -152,8 +145,8 @@ sensors:
     mac: aa:bb:cc:00:11:44
 
 # Gira System 3000 thermostats (gira-ble-api). `id` must match the proxy.
-# `group` may reuse cover floor ids (dg / og1 / eg). Optional `name` overrides
-# the proxy label. Live state comes from GIRA_BLE_API_URL, not this file.
+# `group` may share any groups[].id (e.g. dg / og1 / eg). Optional `name`
+# overrides the proxy label. Live state comes from GIRA_BLE_API_URL.
 thermostats:
   - id: dg-office
     name: Arbeitszimmer

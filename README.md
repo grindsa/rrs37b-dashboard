@@ -278,8 +278,8 @@ Empty floors (no live thermostats) and ids not listed in YAML are hidden. Unpair
 
 Tab **Smarthome** (session required, same unlock as the rest of the dashboard):
 
-- Roller shutters (Shelly 2PM Cover) in `type: covers` groups — ↑ / ↓ controls (active direction becomes pause/stop while moving)
-- LEDVANCE Smart+ WiFi lamps (Tuya local) in `type: lights` groups — one cycle button per lamp/group: **off → on → dim → off** (mixed → on)
+- Roller shutters (Shelly 2PM Cover) — ↑ / ↓ controls (active direction becomes pause/stop while moving); groups with no covers are hidden
+- LEDVANCE Smart+ WiFi lamps (Tuya local) — one cycle button per lamp/group: **off → on → dim → off** (mixed → on); groups with no lamps are hidden
 - Power toggles under **Smarthomegeräte** (Shelly Plug S, Tapo P100, FSAPI radios such as Hama IR110)
 
 Device traffic is server-side (`lib/smarthome.ts` → Shelly RPC, Tapo KLAP, FSAPI HTTP, or Tuya/`tuyapi`). The browser never sees device IPs or `local_key` — only config ids (`groupId` / `coverId` / `lampId` / `plugId`).
@@ -299,7 +299,7 @@ Keep the LEDVANCE Smart+ app closed while using local control — Tuya devices a
 
 ### Config (YAML file)
 
-Devices live in YAML (not `.env`): typed groups, covers, lamps, plugs, BLE gateways, BLU sensors, the Pro 3EM, and Gira thermostats (`thermostats`, sharing floor group ids with covers).
+Devices live in YAML (not `.env`): untyped groups (floors/rooms), covers, lamps, plugs, BLE gateways, BLU sensors, the Pro 3EM, and Gira thermostats. Each tab only shows groups that have matching devices.
 
 ```bash
 cp config/smarthome.example.yml config/smarthome.yml
@@ -311,17 +311,15 @@ $EDITOR config/smarthome.yml
 ```yaml
 groups:
   - id: dg
-    name: Dachgeschoss
-    type: covers         # required: covers | lights
+    name: Dachgeschoss   # shared by covers + thermostats
   - id: wohn
     name: Wohnbereich
-    type: lights
 covers:
   - id: dg-ost
     name: DG Ost
     ip: 192.168.x.x
     coverId: 0
-    group: dg            # must reference type: covers
+    group: dg
     password: "…"        # optional, else SHELLY_RPC_PASSWORD
 lamps:
   - id: stehlampe
@@ -329,7 +327,7 @@ lamps:
     ip: 192.168.x.x
     device_id: "bf…"     # Tuya device id
     local_key: "…"       # Tuya local key (server secret)
-    group: wohn          # must reference type: lights
+    group: wohn
     on_percent: 100      # optional, default 100
     dim_percent: 70      # optional — omit to turn off on group/lamp dim
     # protocol: "3.5"    # optional, default 3.5
@@ -363,14 +361,13 @@ meters:
 ```
 
 - `id` values must be unique within each list; sensor labels must be unique.
-- Every group needs `type: covers` or `type: lights`. Do not nest devices under groups — use top-level `covers` / `lamps` with `group: <id>`.
-- Cover `group` must point at a covers group; lamp `group` at a lights group.
+- Groups are untyped (`id` + `name` only). Do not nest devices under groups — use top-level `covers` / `lamps` / `thermostats` with `group: <id>`. A leftover `type:` on a group is ignored (logged once).
 - `coverId` / `switchId` / `emId` default to `0` when omitted.
 - Lamp cycle maps modes to Tuya DPs `20` (on/off) and `22` (brightness 10–1000). On uses `on_percent` (default 100). Dim uses each lamp’s `dim_percent`; if omitted, that lamp turns **off** on dim (useful in mixed groups). A single lamp without `dim_percent` cycles off → on → off.
 - Plug `vendor` is `shelly` (default), `tapo`, or `fsapi`. Sensor `gateway` plugs must be Shelly (Tapo/FSAPI as gateway is a config error).
 - `password` is optional on Shelly covers, plugs and meters. Without it, `SHELLY_RPC_PASSWORD` is used; the server log lists which devices still fall back. Entries sharing an IP must not have different passwords. Do not set `password` on Tapo or FSAPI plugs.
 - FSAPI entries (`vendor: fsapi`) are power on/off only (same UI toggle as plugs). Optional `pin` (default `1234`) and `port` (default `80`).
-- Empty groups (no matching covers/lamps) are not shown. Unknown `group` or `gateway` references are config errors.
+- Empty groups are hidden per tab (no covers → no Rollo section; no lamps → no Lampen section; no live thermostats → no Heizung floor). Unknown `group` or `gateway` references are config errors.
 - Optional path override: `SMARTHOME_CONFIG_FILE` (Compose sets `/app/config/smarthome.yml`).
 - If the live file is missing, the tab shows `config/smarthome.example.yml` (no LAN probes; control, sensors and Hausverbrauch disabled).
 

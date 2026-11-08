@@ -115,9 +115,9 @@ export type SmarthomeLightGroupStatus = {
 };
 
 export type SmarthomeSnapshot = {
-  /** Cover groups only (type: covers). */
+  /** Groups with at least one cover. */
   groups: SmarthomeGroupStatus[];
-  /** Light groups only (type: lights). */
+  /** Groups with at least one lamp. */
   lightGroups: SmarthomeLightGroupStatus[];
   plugs: PlugDeviceStatus[];
   fetchedAt: string;

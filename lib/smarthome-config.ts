@@ -1,9 +1,10 @@
 /**
- * Smarthome device inventory from a YAML file: typed groups (covers | lights),
+ * Smarthome device inventory from a YAML file: named groups (floors/rooms),
  * covers, lamps (LEDVANCE/Tuya), plugs (Shelly, Tapo, or FSAPI), BLU sensors
  * (via Shelly gateway plugs), energy meters, and Gira thermostats (via
  * gira-ble-api — layout only; live state from the proxy).
- * Thermostats may share any group id/name with covers or lights (same floor).
+ * Groups are untyped — each tab only shows groups that have matching devices
+ * (covers / lamps / thermostats). Empty groups are hidden in that tab.
  * Shelly devices without `password` use SHELLY_RPC_PASSWORD from env.
  * Tapo plugs use TAPO_EMAIL / TAPO_PASSWORD from env (local KLAP).
  * FSAPI devices (e.g. Hama IR110) use optional YAML `pin` / `port` (LAN HTTP).
@@ -16,9 +17,6 @@ import { parse as parseYaml } from "yaml";
 
 export const SENSOR_LABELS = ["Aussen", "Arbeitszimmer", "Wohnzimmer"] as const;
 export type SensorLabel = (typeof SENSOR_LABELS)[number];
-
-export const GROUP_TYPES = ["covers", "lights"] as const;
-export type GroupType = (typeof GROUP_TYPES)[number];
 
 export type SmarthomeCoverConfig = {
   id: string;
@@ -53,10 +51,9 @@ export type SmarthomeLampConfig = {
 export type SmarthomeGroupConfig = {
   id: string;
   name: string;
-  type: GroupType;
-  /** Covers when type is covers (file order); empty for light groups. */
+  /** Covers in this group (file order); may be empty. */
   covers: SmarthomeCoverConfig[];
-  /** Lamps when type is lights (file order); empty for cover groups. */
+  /** Lamps in this group (file order); may be empty. */
   lamps: SmarthomeLampConfig[];
 };
 
@@ -119,8 +116,8 @@ export type DevicePassword = { password: string; deviceId: string };
 
 export type SmarthomeConfig = {
   /**
-   * Cover/light groups with at least one device (Smarthome tab).
-   * Empty groups are omitted here but still appear in `floorGroups`.
+   * Groups with at least one cover or lamp (Smarthome rollos/lights).
+   * Fully empty groups are omitted here but still appear in `floorGroups`.
    */
   groups: SmarthomeGroupConfig[];
   /** All group defs — Heizung floors share these ids/names. */
@@ -175,16 +172,6 @@ function asOptionalDimPercent(
 ): number | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   return asPercent(value, pathLabel);
-}
-
-function asGroupType(value: unknown, pathLabel: string): GroupType {
-  const type = asString(value, pathLabel).toLowerCase();
-  if ((GROUP_TYPES as readonly string[]).includes(type)) {
-    return type as GroupType;
-  }
-  throw new Error(
-    `${ERR_PREFIX}: ${pathLabel} must be one of ${GROUP_TYPES.join(", ")}`,
-  );
 }
 
 function asRecord(value: unknown, pathLabel: string): Record<string, unknown> {
@@ -314,28 +301,35 @@ function assertUnique(ids: string[], kind: string): void {
   }
 }
 
-function parseGroup(raw: unknown, pathLabel: string) {
+function parseGroup(
+  raw: unknown,
+  pathLabel: string,
+): { id: string; name: string; deprecatedType?: string } {
   const obj = asRecord(raw, pathLabel);
   if ("covers" in obj || "lamps" in obj || "thermostats" in obj) {
     throw new Error(
       `${ERR_PREFIX}: ${pathLabel} must not nest covers/lamps/thermostats — list them at the top level with \`group: <id>\``,
     );
   }
+  const deprecatedType =
+    obj.type === undefined || obj.type === null || obj.type === ""
+      ? undefined
+      : asString(obj.type, `${pathLabel}.type`);
   return {
     id: asString(obj.id, `${pathLabel}.id`),
     name: asString(obj.name, `${pathLabel}.name`),
-    type: asGroupType(obj.type, `${pathLabel}.type`),
+    deprecatedType,
   };
 }
 
 function parseThermostat(
   raw: unknown,
   pathLabel: string,
-  groupsById: Map<string, { type: GroupType }>,
+  groupIds: ReadonlySet<string>,
 ): SmarthomeThermostatConfig {
   const obj = asRecord(raw, pathLabel);
   const groupId = asString(obj.group, `${pathLabel}.group`);
-  if (!groupsById.has(groupId)) {
+  if (!groupIds.has(groupId)) {
     throw new Error(
       `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" is not defined under groups`,
     );
@@ -355,19 +349,13 @@ function parseThermostat(
 function parseCover(
   raw: unknown,
   pathLabel: string,
-  groupsById: Map<string, { type: GroupType }>,
+  groupIds: ReadonlySet<string>,
 ): SmarthomeCoverConfig {
   const obj = asRecord(raw, pathLabel);
   const groupId = asString(obj.group, `${pathLabel}.group`);
-  const group = groupsById.get(groupId);
-  if (!group) {
+  if (!groupIds.has(groupId)) {
     throw new Error(
       `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" is not defined under groups`,
-    );
-  }
-  if (group.type !== "covers") {
-    throw new Error(
-      `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" has type ${group.type} — covers require type: covers`,
     );
   }
   return {
@@ -383,19 +371,13 @@ function parseCover(
 function parseLamp(
   raw: unknown,
   pathLabel: string,
-  groupsById: Map<string, { type: GroupType }>,
+  groupIds: ReadonlySet<string>,
 ): SmarthomeLampConfig {
   const obj = asRecord(raw, pathLabel);
   const groupId = asString(obj.group, `${pathLabel}.group`);
-  const group = groupsById.get(groupId);
-  if (!group) {
+  if (!groupIds.has(groupId)) {
     throw new Error(
       `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" is not defined under groups`,
-    );
-  }
-  if (group.type !== "lights") {
-    throw new Error(
-      `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" has type ${group.type} — lamps require type: lights`,
     );
   }
   const protocolRaw = obj.protocol;
@@ -542,15 +524,24 @@ function parseConfig(parsed: unknown): ParseResult {
 
   const groupDefs = root.groups.map((g, i) => parseGroup(g, `groups[${i}]`));
   assertUnique(groupDefs.map((g) => g.id), "group id");
-  const groupsById = new Map(groupDefs.map((g) => [g.id, g]));
+  const groupIds = new Set(groupDefs.map((g) => g.id));
+
+  const notes: string[] = [];
+  for (const def of groupDefs) {
+    if (def.deprecatedType) {
+      notes.push(
+        `group "${def.id}": type: ${def.deprecatedType} is ignored — remove it (groups are untyped)`,
+      );
+    }
+  }
 
   const covers = asArray(root.covers, "covers").map((c, i) =>
-    parseCover(c, `covers[${i}]`, groupsById),
+    parseCover(c, `covers[${i}]`, groupIds),
   );
   assertUnique(covers.map((c) => c.id), "cover id");
 
   const lamps = asArray(root.lamps, "lamps").map((l, i) =>
-    parseLamp(l, `lamps[${i}]`, groupsById),
+    parseLamp(l, `lamps[${i}]`, groupIds),
   );
   assertUnique(lamps.map((l) => l.id), "lamp id");
 
@@ -571,7 +562,7 @@ function parseConfig(parsed: unknown): ParseResult {
   assertUnique(meters.map((m) => m.id), "meter id");
 
   const thermostats = asArray(root.thermostats, "thermostats").map((t, i) =>
-    parseThermostat(t, `thermostats[${i}]`, groupsById),
+    parseThermostat(t, `thermostats[${i}]`, groupIds),
   );
   assertUnique(thermostats.map((t) => t.id), "thermostat id");
 
@@ -582,29 +573,24 @@ function parseConfig(parsed: unknown): ParseResult {
   ];
   const passwordsByIp = buildPasswordMap(shellyPasswordDevices);
 
-  const notes: string[] = [];
   const floorGroups: SmarthomeFloorGroup[] = groupDefs.map((g) => ({
     id: g.id,
     name: g.name,
   }));
   const groups: SmarthomeGroupConfig[] = [];
   for (const def of groupDefs) {
-    if (def.type === "covers") {
-      const groupCovers = covers.filter((c) => c.groupId === def.id);
-      if (groupCovers.length === 0) {
-        notes.push(`group "${def.id}" (covers) has no covers and is not shown`);
-        continue;
-      }
-      groups.push({ ...def, covers: groupCovers, lamps: [] });
-      continue;
-    }
-
+    const groupCovers = covers.filter((c) => c.groupId === def.id);
     const groupLamps = lamps.filter((l) => l.groupId === def.id);
-    if (groupLamps.length === 0) {
-      notes.push(`group "${def.id}" (lights) has no lamps and is not shown`);
+    if (groupCovers.length === 0 && groupLamps.length === 0) {
+      // Still usable for thermostats via floorGroups; hide on Smarthome tab.
       continue;
     }
-    groups.push({ ...def, covers: [], lamps: groupLamps });
+    groups.push({
+      id: def.id,
+      name: def.name,
+      covers: groupCovers,
+      lamps: groupLamps,
+    });
   }
 
   for (const plug of plugs) {
@@ -847,7 +833,7 @@ export function findCoverGroup(
   groupId: string,
 ): SmarthomeGroupConfig | undefined {
   const group = findGroup(config, groupId);
-  return group?.type === "covers" ? group : undefined;
+  return group && group.covers.length > 0 ? group : undefined;
 }
 
 export function findLightGroup(
@@ -855,15 +841,17 @@ export function findLightGroup(
   groupId: string,
 ): SmarthomeGroupConfig | undefined {
   const group = findGroup(config, groupId);
-  return group?.type === "lights" ? group : undefined;
+  return group && group.lamps.length > 0 ? group : undefined;
 }
 
+/** Groups that have at least one cover (Rollos section). */
 export function coverGroups(config: SmarthomeConfig): SmarthomeGroupConfig[] {
-  return config.groups.filter((g) => g.type === "covers");
+  return config.groups.filter((g) => g.covers.length > 0);
 }
 
+/** Groups that have at least one lamp (Lampen section). */
 export function lightGroups(config: SmarthomeConfig): SmarthomeGroupConfig[] {
-  return config.groups.filter((g) => g.type === "lights");
+  return config.groups.filter((g) => g.lamps.length > 0);
 }
 
 /** Visible plugs only; hidden plugs are not switchable. */
