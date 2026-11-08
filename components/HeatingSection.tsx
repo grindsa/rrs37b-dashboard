@@ -17,6 +17,8 @@ import { isPageHidden, onForeground } from "@/lib/foreground-refresh";
 import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 
 const POLL_MS = 8_000;
+/** Wait for more +/- clicks before posting the setpoint. */
+const SETPOINT_DEBOUNCE_MS = 5_000;
 /** BLE setpoint can take up to ~60s. */
 const SETPOINT_FETCH_MS = 75_000;
 
@@ -28,6 +30,8 @@ type LoadState =
 type PendingSetpoint = {
   targetC: number;
   setAt: number;
+  /** Local edits; API call starts after debounce. */
+  phase: "draft" | "sending";
 };
 
 function setpointErrorMessage(code: string | undefined, fallback: string): string {
@@ -72,30 +76,32 @@ function SetpointControls({
   name,
   setpointC,
   enabled,
-  pending,
+  sending,
   onStep,
 }: {
   name: string;
   setpointC: number | null;
   enabled: boolean;
-  pending: boolean;
+  /** True while the REST/BLE write is in flight. */
+  sending: boolean;
   onStep: (delta: number) => void;
 }) {
   const display =
     setpointC === null || !Number.isFinite(setpointC)
       ? "—"
       : formatTemp(setpointC);
+  const buttonsEnabled = enabled && !sending;
 
   return (
     <div className="flex items-center gap-px">
       <button
         type="button"
-        disabled={!enabled || pending}
+        disabled={!buttonsEnabled}
         aria-label={`${name} Soll −0,5°`}
         onClick={() => onStep(-SETPOINT_STEP_C)}
         className={[
           "inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm leading-none transition-colors",
-          enabled && !pending
+          buttonsEnabled
             ? "border-accent/40 text-accent hover:bg-accent-soft/40"
             : "border-hairline text-muted/40",
         ].join(" ")}
@@ -107,11 +113,11 @@ function SetpointControls({
         <p
           className={[
             "text-sm font-semibold tabular-nums leading-none",
-            pending ? "text-muted" : "text-foreground",
+            sending ? "text-muted" : "text-foreground",
           ].join(" ")}
         >
           {display}
-          {pending ? (
+          {sending ? (
             <span className="ml-0.5 text-[0.6rem] font-normal text-muted">
               …
             </span>
@@ -120,12 +126,12 @@ function SetpointControls({
       </div>
       <button
         type="button"
-        disabled={!enabled || pending}
+        disabled={!buttonsEnabled}
         aria-label={`${name} Soll +0,5°`}
         onClick={() => onStep(SETPOINT_STEP_C)}
         className={[
           "inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm leading-none transition-colors",
-          enabled && !pending
+          buttonsEnabled
             ? "border-accent/40 text-accent hover:bg-accent-soft/40"
             : "border-hairline text-muted/40",
         ].join(" ")}
@@ -207,7 +213,7 @@ function ThermostatRow({
             name={thermostat.name}
             setpointC={shownSetpoint}
             enabled={controlsEnabled}
-            pending={Boolean(pending)}
+            sending={pending?.phase === "sending"}
             onStep={onStep}
           />
         </div>
@@ -300,6 +306,9 @@ export function HeatingSection() {
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
   const pendingRef = useRef(pendingById);
   pendingRef.current = pendingById;
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const debounceTimersRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     const tickNow = () => setNowMs(Date.now());
@@ -309,6 +318,15 @@ export function HeatingSection() {
     return () => {
       window.clearInterval(id);
       stopFg();
+    };
+  }, []);
+
+  useEffect(() => {
+    const timers = debounceTimersRef.current;
+    return () => {
+      for (const timer of Object.values(timers)) {
+        window.clearTimeout(timer);
+      }
     };
   }, []);
 
@@ -395,47 +413,24 @@ export function HeatingSection() {
     };
   }, []);
 
-  async function postSetpoint(id: string, delta: number) {
-    if (pendingRef.current[id]) return;
-    const current = findThermostat(state.data, id);
-    if (!current || current.paired !== true || !current.online) return;
-
-    const base =
-      current.setpointC !== null && Number.isFinite(current.setpointC)
-        ? current.setpointC
-        : 21;
-    const targetC = clampSetpointC(base + delta);
-    if (
-      current.setpointC !== null &&
-      Math.abs(current.setpointC - targetC) < 0.05
-    ) {
-      return;
+  function clearDebounceTimer(id: string) {
+    const timer = debounceTimersRef.current[id];
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      delete debounceTimersRef.current[id];
     }
-    if (targetC < SETPOINT_MIN_C || targetC > SETPOINT_MAX_C) return;
+  }
 
+  async function commitSetpoint(id: string) {
+    clearDebounceTimer(id);
+    const draft = pendingRef.current[id];
+    if (!draft || draft.phase !== "draft") return;
+
+    const targetC = draft.targetC;
     setPendingById((prev) => ({
       ...prev,
-      [id]: { targetC, setAt: Date.now() },
+      [id]: { ...draft, phase: "sending", setAt: Date.now() },
     }));
-    setActionErrors((prev) => {
-      if (!prev[id]) return prev;
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-
-    setState((prev) => {
-      if (!prev.data) return prev;
-      const existing = findThermostat(prev.data, id);
-      if (!existing) return prev;
-      return {
-        ...prev,
-        data: patchThermostat(prev.data, {
-          ...existing,
-          setpointC: targetC,
-        }),
-      };
-    });
 
     try {
       const res = await fetch("/api/heating/setpoint", {
@@ -455,7 +450,10 @@ export function HeatingSection() {
       if (!res.ok || !body.ok) {
         setActionErrors((prev) => ({
           ...prev,
-          [id]: setpointErrorMessage(body.code, body.error ?? `HTTP ${res.status}`),
+          [id]: setpointErrorMessage(
+            body.code,
+            body.error ?? `HTTP ${res.status}`,
+          ),
         }));
         return;
       }
@@ -466,6 +464,19 @@ export function HeatingSection() {
           return {
             status: "live",
             data: patchThermostat(prev.data, body.thermostat!),
+          };
+        });
+      } else {
+        setState((prev) => {
+          if (!prev.data) return prev;
+          const existing = findThermostat(prev.data, id);
+          if (!existing) return prev;
+          return {
+            ...prev,
+            data: patchThermostat(prev.data, {
+              ...existing,
+              setpointC: targetC,
+            }),
           };
         });
       }
@@ -482,12 +493,47 @@ export function HeatingSection() {
       }));
     } finally {
       setPendingById((prev) => {
-        if (!prev[id]) return prev;
+        if (!prev[id] || prev[id].phase !== "sending") return prev;
         const next = { ...prev };
         delete next[id];
         return next;
       });
     }
+  }
+
+  function scheduleSetpoint(id: string, delta: number) {
+    const existing = pendingRef.current[id];
+    if (existing?.phase === "sending") return;
+
+    const current = findThermostat(stateRef.current.data, id);
+    if (!current || current.paired !== true || !current.online) return;
+
+    const base =
+      existing?.phase === "draft"
+        ? existing.targetC
+        : current.setpointC !== null && Number.isFinite(current.setpointC)
+          ? current.setpointC
+          : 21;
+    const targetC = clampSetpointC(base + delta);
+    if (Math.abs(base - targetC) < 0.05) return;
+    if (targetC < SETPOINT_MIN_C || targetC > SETPOINT_MAX_C) return;
+
+    setPendingById((prev) => ({
+      ...prev,
+      [id]: { targetC, setAt: Date.now(), phase: "draft" },
+    }));
+    setActionErrors((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+    clearDebounceTimer(id);
+    debounceTimersRef.current[id] = window.setTimeout(() => {
+      delete debounceTimersRef.current[id];
+      void commitSetpoint(id);
+    }, SETPOINT_DEBOUNCE_MS);
   }
 
   const data = state.data;
@@ -547,7 +593,7 @@ export function HeatingSection() {
               nowMs={nowMs}
               pendingById={pendingById}
               actionErrors={actionErrors}
-              onStep={(id, delta) => void postSetpoint(id, delta)}
+              onStep={(id, delta) => scheduleSetpoint(id, delta)}
             />
           ))}
         </div>

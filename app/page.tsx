@@ -81,12 +81,12 @@ async function AuthGatedHome() {
             <BvgSection />
           </DashboardTabPanel>
 
-          <DashboardTabPanel id="heating">
-            <HeatingSection />
-          </DashboardTabPanel>
-
           <DashboardTabPanel id="smarthome">
             <SmarthomeSection />
+          </DashboardTabPanel>
+
+          <DashboardTabPanel id="heating">
+            <HeatingSection />
           </DashboardTabPanel>
 
           <DashboardTabPanel id="pv">

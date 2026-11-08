@@ -20,8 +20,8 @@ type TabDef =
 const TABS: TabDef[] = [
   { id: "home", label: "Sensoren & Wetter", icon: "home" },
   { id: "bvg", label: "BVG", icon: "bvg" },
-  { id: "heating", label: "Heizung", icon: "heating" },
   { id: "smarthome", label: "Smarthome", icon: "smarthome" },
+  { id: "heating", label: "Heizung", icon: "heating" },
   { id: "pv", label: "PV", icon: "pv" },
 ];
 
