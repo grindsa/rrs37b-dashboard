@@ -95,6 +95,8 @@ See `.env.example`. Never commit `.env` (repo is public).
 | `SHELLY_RPC_PASSWORD` | Fallback RPC password for Shelly devices without `password` in the YAML |
 | `TAPO_EMAIL` / `TAPO_PASSWORD` | Tapo app account for plugs with `vendor: tapo` (local KLAP handshake only). On firmware ≥1.4 enable **Third-Party Compatibility** in the app (Me → Third-Party Services); toggle off/on if handshake still returns 403 |
 | `SMARTHOME_CONFIG_FILE` | Optional path to Smarthome YAML (default `config/smarthome.yml`) |
+| `GIRA_BLE_API_URL` | gira-ble-api base URL for the Heizung tab |
+| `GIRA_BLE_API_TOKEN` | Optional Bearer token for the heating proxy |
 | `OPEN_METEO_LAT` / `LON` | Fixed coords for 37B (`52.565379` / `13.441779`) |
 | `BVG_STOP_*` | Stop IDs/labels; 1+2 = default two-column Zuhause, 3+ = picker options |
 | `APSYSTEMS_EZ1_HOST` | EZ1-M LAN IP — solar production (`p1 + p2`) |
@@ -112,6 +114,8 @@ lib/
   shelly.ts          # LAN RPC → BLU sensors
   smarthome.ts       # Cover / lamp / plug status + control
   smarthome-config.ts
+  heating.ts         # Gira thermostat snapshot + setpoint
+  gira-ble.ts        # gira-ble-api HTTP client
   light-mode.ts      # Lamp cycle helpers (shared with UI)
   tuya-light.ts      # LEDVANCE / Tuya local (tuyapi)
   tapo-plug.ts       # Tapo P100 local KLAP (vendor: tapo)
@@ -245,6 +249,31 @@ Pin a single device if you have several:
 NOAH_MQTT_TOPIC=noah2mqtt/0ABC00AA15AA00AA
 ```
 
+## Heizung
+
+Tab **Heizung** (radiator icon in the tab strip; session required) talks to a LAN **gira-ble-api** proxy for Gira System 3000 thermostats. The browser never calls the proxy (no CORS) — only Next.js Route Handlers do.
+
+| Env | Purpose |
+|-----|---------|
+| `GIRA_BLE_API_URL` | Proxy base URL, e.g. `http://192.168.123.124:8787` |
+| `GIRA_BLE_API_TOKEN` | Bearer token when the proxy has `api_tokens` set |
+
+Floor layout lives in the same `config/smarthome.yml` as rollers — add a top-level `thermostats` list. `group` may reuse cover floor ids (`dg`, `og`, …); `id` must match gira-ble-api.
+
+```yaml
+thermostats:
+  - id: dg-office
+    name: Arbeitszimmer   # optional display override
+    group: dg             # same id as the Dachgeschoss cover group
+```
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/heating` | Floor-grouped snapshot (Ist/Soll/online/paired/`last_seen_at`) |
+| `POST /api/heating/setpoint` | `{ id, celsius }` — BLE write (~5–60s); UI shows pending and blocks double-submit |
+
+Empty floors (no live thermostats) and ids not listed in YAML are hidden. Unpaired rooms show a muted Bluetooth icon and disabled ± controls.
+
 ## Smarthome
 
 Tab **Smarthome** (session required, same unlock as the rest of the dashboard):
@@ -270,7 +299,7 @@ Keep the LEDVANCE Smart+ app closed while using local control — Tuya devices a
 
 ### Config (YAML file)
 
-Devices live in YAML (not `.env`): typed groups, covers, lamps, plugs, BLE gateways, BLU sensors and the Pro 3EM.
+Devices live in YAML (not `.env`): typed groups, covers, lamps, plugs, BLE gateways, BLU sensors, the Pro 3EM, and Gira thermostats (`thermostats`, sharing floor group ids with covers).
 
 ```bash
 cp config/smarthome.example.yml config/smarthome.yml

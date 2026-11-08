@@ -17,6 +17,7 @@ import {
 import { BvgSection } from "@/components/BvgSection";
 import { PvSection } from "@/components/PvSection";
 import { SmarthomeSection } from "@/components/SmarthomeSection";
+import { HeatingSection } from "@/components/HeatingSection";
 import { getAuthStatus, isAuthenticated } from "@/lib/auth";
 import { getShellySensors } from "@/lib/shelly";
 import { getWeather } from "@/lib/weather";
@@ -80,6 +81,10 @@ async function AuthGatedHome() {
             <BvgSection />
           </DashboardTabPanel>
 
+          <DashboardTabPanel id="heating">
+            <HeatingSection />
+          </DashboardTabPanel>
+
           <DashboardTabPanel id="smarthome">
             <SmarthomeSection />
           </DashboardTabPanel>
@@ -111,7 +116,7 @@ function Footer({ authenticated }: { authenticated: boolean }) {
   return (
     <p className="pb-2 pt-2 text-center text-[0.7rem] tracking-wide text-muted">
       {authenticated
-        ? "RRS37 · Shelly LAN · Open-Meteo · BVG · PV · Smarthome"
+        ? "RRS37 · Shelly LAN · Open-Meteo · BVG · Heizung · PV · Smarthome"
         : "RRS37"}
     </p>
   );

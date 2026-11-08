@@ -16,7 +16,9 @@
 # Groups shown in this order. Each group has a required `type`:
 #   covers — roller shutters (list under `covers` with group: <id>)
 #   lights — LEDVANCE / Tuya lamps (list under `lamps` with group: <id>)
-# Empty groups (no matching devices) are hidden.
+# Thermostats (Heizung tab) may reuse the same group id/name as covers.
+# Empty cover/light groups are hidden in Smarthome; Heizung still uses the
+# group label when thermostats are assigned to it.
 groups:
   - id: dg
     name: Dachgeschoss
@@ -148,6 +150,20 @@ sensors:
   - label: Wohnzimmer
     gateway: gw-wohnzimmer
     mac: aa:bb:cc:00:11:44
+
+# Gira System 3000 thermostats (gira-ble-api). `id` must match the proxy.
+# `group` may reuse cover floor ids (dg / og1 / eg). Optional `name` overrides
+# the proxy label. Live state comes from GIRA_BLE_API_URL, not this file.
+thermostats:
+  - id: dg-office
+    name: Arbeitszimmer
+    group: dg
+  - id: og1-kids
+    name: Kinderzimmer
+    group: og1
+  - id: eg-living
+    name: Wohnzimmer
+    group: eg
 
 # Shelly Pro 3EM. The first meter is used for Hausverbrauch on the PV tab.
 # If a Growatt NOAH uses this meter for Smart Self-Consumption, keep Shelly

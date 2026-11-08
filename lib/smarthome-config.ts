@@ -1,7 +1,9 @@
 /**
  * Smarthome device inventory from a YAML file: typed groups (covers | lights),
  * covers, lamps (LEDVANCE/Tuya), plugs (Shelly, Tapo, or FSAPI), BLU sensors
- * (via Shelly gateway plugs) and energy meters.
+ * (via Shelly gateway plugs), energy meters, and Gira thermostats (via
+ * gira-ble-api — layout only; live state from the proxy).
+ * Thermostats may share any group id/name with covers or lights (same floor).
  * Shelly devices without `password` use SHELLY_RPC_PASSWORD from env.
  * Tapo plugs use TAPO_EMAIL / TAPO_PASSWORD from env (local KLAP).
  * FSAPI devices (e.g. Hama IR110) use optional YAML `pin` / `port` (LAN HTTP).
@@ -99,11 +101,31 @@ export type SmarthomeMeterConfig = {
   password?: string;
 };
 
+/** Gira thermostat layout — `id` must match gira-ble-api; no LAN secrets here. */
+export type SmarthomeThermostatConfig = {
+  id: string;
+  /** Optional display override; otherwise proxy `name`. */
+  name?: string;
+  groupId: string;
+};
+
+/** Every group from YAML (file order), including empty cover/light groups. */
+export type SmarthomeFloorGroup = {
+  id: string;
+  name: string;
+};
+
 export type DevicePassword = { password: string; deviceId: string };
 
 export type SmarthomeConfig = {
-  /** Only groups with at least one cover. */
+  /**
+   * Cover/light groups with at least one device (Smarthome tab).
+   * Empty groups are omitted here but still appear in `floorGroups`.
+   */
   groups: SmarthomeGroupConfig[];
+  /** All group defs — Heizung floors share these ids/names. */
+  floorGroups: SmarthomeFloorGroup[];
+  thermostats: SmarthomeThermostatConfig[];
   plugs: SmarthomePlugConfig[];
   sensors: SmarthomeSensorConfig[];
   meters: SmarthomeMeterConfig[];
@@ -125,6 +147,8 @@ const MAC_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/;
 function emptyConfig(): SmarthomeConfig {
   return {
     groups: [],
+    floorGroups: [],
+    thermostats: [],
     plugs: [],
     sensors: [],
     meters: [],
@@ -292,15 +316,39 @@ function assertUnique(ids: string[], kind: string): void {
 
 function parseGroup(raw: unknown, pathLabel: string) {
   const obj = asRecord(raw, pathLabel);
-  if ("covers" in obj || "lamps" in obj) {
+  if ("covers" in obj || "lamps" in obj || "thermostats" in obj) {
     throw new Error(
-      `${ERR_PREFIX}: ${pathLabel} must not nest covers/lamps — list them at the top level with \`group: <id>\``,
+      `${ERR_PREFIX}: ${pathLabel} must not nest covers/lamps/thermostats — list them at the top level with \`group: <id>\``,
     );
   }
   return {
     id: asString(obj.id, `${pathLabel}.id`),
     name: asString(obj.name, `${pathLabel}.name`),
     type: asGroupType(obj.type, `${pathLabel}.type`),
+  };
+}
+
+function parseThermostat(
+  raw: unknown,
+  pathLabel: string,
+  groupsById: Map<string, { type: GroupType }>,
+): SmarthomeThermostatConfig {
+  const obj = asRecord(raw, pathLabel);
+  const groupId = asString(obj.group, `${pathLabel}.group`);
+  if (!groupsById.has(groupId)) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" is not defined under groups`,
+    );
+  }
+  const nameRaw = obj.name;
+  const name =
+    nameRaw === undefined || nameRaw === null || nameRaw === ""
+      ? undefined
+      : asString(nameRaw, `${pathLabel}.name`);
+  return {
+    id: asString(obj.id, `${pathLabel}.id`),
+    name,
+    groupId,
   };
 }
 
@@ -522,6 +570,11 @@ function parseConfig(parsed: unknown): ParseResult {
   );
   assertUnique(meters.map((m) => m.id), "meter id");
 
+  const thermostats = asArray(root.thermostats, "thermostats").map((t, i) =>
+    parseThermostat(t, `thermostats[${i}]`, groupsById),
+  );
+  assertUnique(thermostats.map((t) => t.id), "thermostat id");
+
   const shellyPasswordDevices: PasswordDevice[] = [
     ...covers,
     ...plugs.filter((p) => p.vendor === "shelly"),
@@ -530,6 +583,10 @@ function parseConfig(parsed: unknown): ParseResult {
   const passwordsByIp = buildPasswordMap(shellyPasswordDevices);
 
   const notes: string[] = [];
+  const floorGroups: SmarthomeFloorGroup[] = groupDefs.map((g) => ({
+    id: g.id,
+    name: g.name,
+  }));
   const groups: SmarthomeGroupConfig[] = [];
   for (const def of groupDefs) {
     if (def.type === "covers") {
@@ -577,7 +634,15 @@ function parseConfig(parsed: unknown): ParseResult {
   }
 
   return {
-    config: { groups, plugs, sensors, meters, passwordsByIp },
+    config: {
+      groups,
+      floorGroups,
+      thermostats,
+      plugs,
+      sensors,
+      meters,
+      passwordsByIp,
+    },
     notes,
   };
 }
@@ -811,4 +876,11 @@ export function findPlug(
 
 export function visiblePlugs(config: SmarthomeConfig): SmarthomePlugConfig[] {
   return config.plugs.filter((p) => !p.hidden);
+}
+
+export function findThermostat(
+  config: SmarthomeConfig,
+  thermostatId: string,
+): SmarthomeThermostatConfig | undefined {
+  return config.thermostats.find((t) => t.id === thermostatId);
 }
