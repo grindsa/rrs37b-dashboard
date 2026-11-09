@@ -23,6 +23,8 @@ import { takeControlSlot } from "@/lib/control-throttle";
 export type HeatingThermostatStatus = {
   id: string;
   name: string;
+  /** Config `group_primary: true` — Ist shown on the floor group header. */
+  groupPrimary: boolean;
   online: boolean;
   paired: boolean | null;
   temperatureC: number | null;
@@ -49,10 +51,12 @@ export type HeatingSnapshot = {
 function toStatus(
   live: GiraThermostat,
   displayName: string | undefined,
+  groupPrimary = false,
 ): HeatingThermostatStatus {
   return {
     id: live.id,
     name: displayName?.trim() || live.name,
+    groupPrimary,
     online: live.online,
     paired: live.paired,
     temperatureC: live.temperature_c,
@@ -74,7 +78,7 @@ function buildGroups(
       for (const member of members) {
         const live = byId.get(member.id);
         if (!live) continue;
-        thermostats.push(toStatus(live, member.name));
+        thermostats.push(toStatus(live, member.name, member.groupPrimary));
       }
       return {
         id: group.id,
@@ -184,7 +188,7 @@ export async function runSetpoint(
     const live = await setGiraThermostatSetpoint(id, celsius);
     return {
       ok: true,
-      thermostat: toStatus(live, configured.name),
+      thermostat: toStatus(live, configured.name, configured.groupPrimary),
     };
   } catch (error) {
     if (error instanceof GiraBleError) {

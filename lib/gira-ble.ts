@@ -1,5 +1,5 @@
 /**
- * Server-side client for gira-ble-api (Gira System 3000 thermostats).
+ * Server-side client for gira-ble-api (Gira System 3000 thermostats + covers).
  * Call only from Route Handlers / server code — the proxy has no CORS.
  */
 
@@ -12,9 +12,9 @@ export {
   clampSetpointC,
 } from "@/lib/heating-setpoint";
 
-/** BLE setpoint can take tens of seconds. */
+/** BLE list/ads are short; GATT writes can take tens of seconds. */
 const LIST_TIMEOUT_MS = 8_000;
-const SETPOINT_TIMEOUT_MS = 75_000;
+const COMMAND_TIMEOUT_MS = 75_000;
 
 export type GiraThermostat = {
   id: string;
@@ -29,6 +29,22 @@ export type GiraThermostat = {
   rssi: number | null;
   error: string | null;
 };
+
+export type GiraCover = {
+  id: string;
+  name: string;
+  mac: string | null;
+  online: boolean;
+  paired: boolean | null;
+  /** 0 = closed, 100 = open (Home Assistant cover convention). */
+  position_pct: number | null;
+  updated_at: string | null;
+  last_seen_at: string | null;
+  rssi: number | null;
+  error: string | null;
+};
+
+export type GiraCoverAction = "up" | "down" | "stop";
 
 export type GiraBleApiError = {
   error: string;
@@ -132,6 +148,30 @@ function normalizeThermostat(raw: unknown): GiraThermostat | null {
   };
 }
 
+function normalizeCover(raw: unknown): GiraCover | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const id = asNullableString(o.id);
+  if (!id) return null;
+  const positionRaw = asNullableNumber(o.position_pct);
+  const position_pct =
+    positionRaw === null
+      ? null
+      : Math.max(0, Math.min(100, Math.round(positionRaw)));
+  return {
+    id,
+    name: asNullableString(o.name) ?? id,
+    mac: asNullableString(o.mac),
+    online: o.online === true,
+    paired: asNullableBool(o.paired),
+    position_pct,
+    updated_at: asNullableString(o.updated_at),
+    last_seen_at: asNullableString(o.last_seen_at),
+    rssi: asNullableNumber(o.rssi),
+    error: asNullableString(o.error),
+  };
+}
+
 async function giraFetch(
   path: string,
   init: RequestInit & { timeoutMs: number },
@@ -161,10 +201,10 @@ async function giraFetch(
       error instanceof DOMException && error.name === "TimeoutError";
     throw new GiraBleError(
       aborted
-        ? "Heizung-Proxy Timeout"
+        ? "Gira-Proxy Timeout"
         : error instanceof Error
           ? error.message
-          : "Heizung-Proxy nicht erreichbar",
+          : "Gira-Proxy nicht erreichbar",
       aborted ? "timeout" : "unreachable",
       502,
     );
@@ -176,10 +216,25 @@ async function throwIfNotOk(res: Response): Promise<void> {
   const body = await readJson(res);
   const detail = parseDetail(body);
   throw new GiraBleError(
-    detail?.error ?? `Heizung-Proxy HTTP ${res.status}`,
+    detail?.error ?? `Gira-Proxy HTTP ${res.status}`,
     detail?.code ?? (res.status === 401 ? "unauthorized" : "http_error"),
     res.status,
   );
+}
+
+function asDeviceList(
+  body: unknown,
+  wrappedKey: "thermostats" | "covers",
+): unknown[] | null {
+  if (Array.isArray(body)) return body;
+  if (
+    body &&
+    typeof body === "object" &&
+    Array.isArray((body as Record<string, unknown>)[wrappedKey])
+  ) {
+    return (body as Record<string, unknown[]>)[wrappedKey];
+  }
+  return null;
 }
 
 export async function giraBleHealth(): Promise<{ ok: boolean }> {
@@ -203,13 +258,7 @@ export async function listGiraThermostats(): Promise<GiraThermostat[]> {
   });
   await throwIfNotOk(res);
   const body = await readJson(res);
-  const list = Array.isArray(body)
-    ? body
-    : body &&
-        typeof body === "object" &&
-        Array.isArray((body as { thermostats?: unknown }).thermostats)
-      ? ((body as { thermostats: unknown[] }).thermostats)
-      : null;
+  const list = asDeviceList(body, "thermostats");
   if (!list) {
     throw new GiraBleError(
       "Unerwartete Antwort von /thermostats",
@@ -231,7 +280,7 @@ export async function setGiraThermostatSetpoint(
     `/thermostats/${encodeURIComponent(id)}/setpoint`,
     {
       method: "POST",
-      timeoutMs: SETPOINT_TIMEOUT_MS,
+      timeoutMs: COMMAND_TIMEOUT_MS,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ celsius: target }),
     },
@@ -247,4 +296,45 @@ export async function setGiraThermostatSetpoint(
     );
   }
   return thermostat;
+}
+
+export async function listGiraCovers(): Promise<GiraCover[]> {
+  const res = await giraFetch("/covers", {
+    method: "GET",
+    timeoutMs: LIST_TIMEOUT_MS,
+  });
+  await throwIfNotOk(res);
+  const body = await readJson(res);
+  const list = asDeviceList(body, "covers");
+  if (!list) {
+    throw new GiraBleError(
+      "Unerwartete Antwort von /covers",
+      "bad_response",
+      502,
+    );
+  }
+  return list.map(normalizeCover).filter((c): c is GiraCover => c !== null);
+}
+
+export async function commandGiraCover(
+  id: string,
+  action: GiraCoverAction,
+): Promise<GiraCover> {
+  const res = await giraFetch(`/covers/${encodeURIComponent(id)}/command`, {
+    method: "POST",
+    timeoutMs: COMMAND_TIMEOUT_MS,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action }),
+  });
+  await throwIfNotOk(res);
+  const body = await readJson(res);
+  const cover = normalizeCover(body);
+  if (!cover) {
+    throw new GiraBleError(
+      "Unerwartete Antwort vom Cover-Befehl",
+      "bad_response",
+      502,
+    );
+  }
+  return cover;
 }

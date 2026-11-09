@@ -235,26 +235,67 @@ function GroupBlock({
   actionErrors: Record<string, string>;
   onStep: (id: string, delta: number) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const count = group.thermostats.length;
+  const onlineCount = group.thermostats.filter((t) => t.online).length;
+  const primary = group.thermostats.find((t) => t.groupPrimary);
+
   return (
     <section aria-labelledby={`heating-group-${group.id}`}>
-      <h2
-        id={`heating-group-${group.id}`}
-        className="text-base font-semibold tracking-tight"
-      >
-        {group.name}
-      </h2>
-      <ul className="mt-3 flex flex-col gap-3">
-        {group.thermostats.map((t) => (
-          <ThermostatRow
-            key={t.id}
-            thermostat={t}
-            nowMs={nowMs}
-            pending={pendingById[t.id]}
-            actionError={actionErrors[t.id]}
-            onStep={(delta) => onStep(t.id, delta)}
-          />
-        ))}
-      </ul>
+      <div className="flex items-center justify-between gap-3">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={`heating-group-thermostats-${group.id}`}
+          onClick={() => setExpanded((v) => !v)}
+          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        >
+          <span className="text-xs text-muted" aria-hidden>
+            {expanded ? "▾" : "▸"}
+          </span>
+          <span className="min-w-0">
+            <span
+              id={`heating-group-${group.id}`}
+              className="block text-base font-semibold tracking-tight"
+            >
+              {group.name}
+            </span>
+            <span className="mt-0.5 block text-xs text-muted">
+              {count === 1 ? "1 Thermostat" : `${count} Thermostate`}
+              {count > 0 ? ` · ${onlineCount} online` : null}
+              {expanded ? "" : " · antippen für Details"}
+            </span>
+          </span>
+        </button>
+        {primary ? (
+          <div className="min-w-[3.5rem] shrink-0 text-right">
+            <p className="text-[0.65rem] uppercase tracking-wide text-muted">
+              Ist
+            </p>
+            <p className="text-lg font-semibold tabular-nums leading-none text-foreground">
+              {formatTemp(primary.temperatureC)}
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      {expanded ? (
+        <ul
+          id={`heating-group-thermostats-${group.id}`}
+          className="mt-3 flex flex-col gap-3"
+        >
+          {group.thermostats.map((t) => (
+            <ThermostatRow
+              key={t.id}
+              thermostat={t}
+              nowMs={nowMs}
+              pending={pendingById[t.id]}
+              actionError={actionErrors[t.id]}
+              onStep={(delta) => onStep(t.id, delta)}
+            />
+          ))}
+        </ul>
+      ) : null}
     </section>
   );
 }
