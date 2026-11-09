@@ -258,13 +258,14 @@ Tab **Heizung** (radiator icon in the tab strip; session required) talks to a LA
 | `GIRA_BLE_API_URL` | Proxy base URL, e.g. `http://192.168.123.124:8787` |
 | `GIRA_BLE_API_TOKEN` | Bearer token when the proxy has `api_tokens` set |
 
-Floor layout lives in the same `config/smarthome.yml` as rollers — add a top-level `thermostats` list. `group` may reuse cover floor ids (`dg`, `og`, …); `id` must match gira-ble-api.
+Floor layout lives in the same `config/smarthome.yml` as rollers — add a top-level `thermostats` list. `group` may reuse cover floor ids (`dg`, `og`, …); `id` must match gira-ble-api. Gira covers (5367xx) use the same proxy under `covers:` with `vendor: gira` (Rollos tab, not Heizung).
 
 ```yaml
 thermostats:
   - id: dg-office
     name: Arbeitszimmer   # optional display override
     group: dg             # same id as the Dachgeschoss cover group
+    group_primary: true   # optional; Ist on collapsed floor header (≤1 per group)
 ```
 
 | Endpoint | Purpose |
@@ -278,11 +279,11 @@ Empty floors (no live thermostats) and ids not listed in YAML are hidden. Unpair
 
 Tab **Smarthome** (session required, same unlock as the rest of the dashboard):
 
-- Roller shutters (Shelly 2PM Cover) — ↑ / ↓ controls (active direction becomes pause/stop while moving); groups with no covers are hidden
+- Roller shutters (Shelly 2PM Cover and Gira System 3000 covers via gira-ble-api) — ↑ / ↓ controls (active direction becomes pause/stop while moving); groups with no covers are hidden
 - LEDVANCE Smart+ WiFi lamps (Tuya local) — one cycle button per lamp/group: **off → on → dim → off** (mixed → on); groups with no lamps are hidden
 - Power toggles under **Smarthomegeräte** (Shelly Plug S, Tapo P100, FSAPI radios such as Hama IR110)
 
-Device traffic is server-side (`lib/smarthome.ts` → Shelly RPC, Tapo KLAP, FSAPI HTTP, or Tuya/`tuyapi`). The browser never sees device IPs or `local_key` — only config ids (`groupId` / `coverId` / `lampId` / `plugId`).
+Device traffic is server-side (`lib/smarthome.ts` → Shelly RPC, gira-ble-api, Tapo KLAP, FSAPI HTTP, or Tuya/`tuyapi`). The browser never sees device IPs or `local_key` — only config ids (`groupId` / `coverId` / `lampId` / `plugId`).
 
 | Endpoint | Purpose |
 |----------|---------|
@@ -321,6 +322,10 @@ covers:
     coverId: 0
     group: dg
     password: "…"        # optional, else SHELLY_RPC_PASSWORD
+  - id: eg-living-blind
+    name: Wohnzimmer Jalousie
+    vendor: gira         # Gira 5367xx via GIRA_BLE_API_URL; no ip/password
+    group: eg
 lamps:
   - id: stehlampe
     name: Stehlampe
@@ -363,6 +368,7 @@ meters:
 - `id` values must be unique within each list; sensor labels must be unique.
 - Groups are untyped (`id` + `name` only). Do not nest devices under groups — use top-level `covers` / `lamps` / `thermostats` with `group: <id>`. A leftover `type:` on a group is ignored (logged once).
 - `coverId` / `switchId` / `emId` default to `0` when omitted.
+- Cover `vendor` is `shelly` (default) or `gira`. Gira covers share `GIRA_BLE_API_URL` / `GIRA_BLE_API_TOKEN` with Heizung; `id` must match gira-ble-api `covers[].id`. Do not set `ip` / `coverId` / `password` on Gira covers.
 - Lamp cycle maps modes to Tuya DPs `20` (on/off) and `22` (brightness 10–1000). On uses `on_percent` (default 100). Dim uses each lamp’s `dim_percent`; if omitted, that lamp turns **off** on dim (useful in mixed groups). A single lamp without `dim_percent` cycles off → on → off.
 - Plug `vendor` is `shelly` (default), `tapo`, or `fsapi`. Sensor `gateway` plugs must be Shelly (Tapo/FSAPI as gateway is a config error).
 - `password` is optional on Shelly covers, plugs and meters. Without it, `SHELLY_RPC_PASSWORD` is used; the server log lists which devices still fall back. Entries sharing an IP must not have different passwords. Do not set `password` on Tapo or FSAPI plugs.

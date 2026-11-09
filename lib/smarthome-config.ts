@@ -1,8 +1,9 @@
 /**
  * Smarthome device inventory from a YAML file: named groups (floors/rooms),
- * covers, lamps (LEDVANCE/Tuya), plugs (Shelly, Tapo, or FSAPI), BLU sensors
- * (via Shelly gateway plugs), energy meters, and Gira thermostats (via
- * gira-ble-api — layout only; live state from the proxy).
+ * covers (Shelly 2PM or Gira 5367xx via gira-ble-api), lamps (LEDVANCE/Tuya),
+ * plugs (Shelly, Tapo, or FSAPI), BLU sensors (via Shelly gateway plugs),
+ * energy meters, and Gira thermostats (via gira-ble-api — layout only; live
+ * state from the proxy).
  * Groups are untyped — each tab only shows groups that have matching devices
  * (covers / lamps / thermostats). Empty groups are hidden in that tab.
  * Shelly devices without `password` use SHELLY_RPC_PASSWORD from env.
@@ -18,15 +19,47 @@ import { parse as parseYaml } from "yaml";
 export const SENSOR_LABELS = ["Aussen", "Arbeitszimmer", "Wohnzimmer"] as const;
 export type SensorLabel = (typeof SENSOR_LABELS)[number];
 
-export type SmarthomeCoverConfig = {
+export const COVER_VENDORS = ["shelly", "gira"] as const;
+export type CoverVendor = (typeof COVER_VENDORS)[number];
+
+/** Shelly 2PM cover — LAN RPC; optional per-device password. */
+export type SmarthomeShellyCoverConfig = {
   id: string;
   name: string;
+  vendor: "shelly";
   ip: string;
   /** Shelly Cover component id (usually 0). */
   coverId: number;
   groupId: string;
   password?: string;
 };
+
+/**
+ * Gira System 3000 cover/timer (e.g. 536727) — layout only; `id` must match
+ * gira-ble-api. MAC/pairing live on the proxy (no ip/password here).
+ */
+export type SmarthomeGiraCoverConfig = {
+  id: string;
+  name: string;
+  vendor: "gira";
+  groupId: string;
+};
+
+export type SmarthomeCoverConfig =
+  | SmarthomeShellyCoverConfig
+  | SmarthomeGiraCoverConfig;
+
+export function isShellyCover(
+  cover: SmarthomeCoverConfig,
+): cover is SmarthomeShellyCoverConfig {
+  return cover.vendor === "shelly";
+}
+
+export function isGiraCover(
+  cover: SmarthomeCoverConfig,
+): cover is SmarthomeGiraCoverConfig {
+  return cover.vendor === "gira";
+}
 
 export type SmarthomeLampConfig = {
   id: string;
@@ -104,6 +137,11 @@ export type SmarthomeThermostatConfig = {
   /** Optional display override; otherwise proxy `name`. */
   name?: string;
   groupId: string;
+  /**
+   * When true (`group_primary` in YAML), this thermostat’s Ist temperature
+   * is shown on the Heizung group header. At most one per group.
+   */
+  groupPrimary: boolean;
 };
 
 /** Every group from YAML (file order), including empty cover/light groups. */
@@ -343,7 +381,30 @@ function parseThermostat(
     id: asString(obj.id, `${pathLabel}.id`),
     name,
     groupId,
+    groupPrimary: asOptionalBoolean(
+      obj.group_primary ?? obj.groupPrimary,
+      `${pathLabel}.group_primary`,
+    ),
   };
+}
+
+function asCoverVendor(value: unknown, pathLabel: string): CoverVendor {
+  if (value === undefined || value === null || value === "") return "shelly";
+  const vendor = asString(value, pathLabel).toLowerCase();
+  if ((COVER_VENDORS as readonly string[]).includes(vendor)) {
+    return vendor as CoverVendor;
+  }
+  throw new Error(
+    `${ERR_PREFIX}: ${pathLabel} must be one of ${COVER_VENDORS.join(", ")}`,
+  );
+}
+
+function hasForbiddenGiraCoverField(
+  obj: Record<string, unknown>,
+  key: string,
+): boolean {
+  const value = obj[key];
+  return value !== undefined && value !== null && value !== "";
 }
 
 function parseCover(
@@ -358,9 +419,25 @@ function parseCover(
       `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" is not defined under groups`,
     );
   }
+  const id = asString(obj.id, `${pathLabel}.id`);
+  const name = asString(obj.name, `${pathLabel}.name`);
+  const vendor = asCoverVendor(obj.vendor, `${pathLabel}.vendor`);
+
+  if (vendor === "gira") {
+    for (const key of ["ip", "coverId", "password"] as const) {
+      if (hasForbiddenGiraCoverField(obj, key)) {
+        throw new Error(
+          `${ERR_PREFIX}: ${pathLabel}.${key} is not allowed for vendor gira (pairing lives on gira-ble-api)`,
+        );
+      }
+    }
+    return { id, name, vendor: "gira", groupId };
+  }
+
   return {
-    id: asString(obj.id, `${pathLabel}.id`),
-    name: asString(obj.name, `${pathLabel}.name`),
+    id,
+    name,
+    vendor: "shelly",
     ip: asIp(obj.ip, `${pathLabel}.ip`),
     coverId: asComponentId(obj.coverId, `${pathLabel}.coverId`),
     groupId,
@@ -565,9 +642,19 @@ function parseConfig(parsed: unknown): ParseResult {
     parseThermostat(t, `thermostats[${i}]`, groupIds),
   );
   assertUnique(thermostats.map((t) => t.id), "thermostat id");
+  for (const groupId of groupIds) {
+    const primaries = thermostats.filter(
+      (t) => t.groupId === groupId && t.groupPrimary,
+    );
+    if (primaries.length > 1) {
+      throw new Error(
+        `${ERR_PREFIX}: group "${groupId}" has ${primaries.length} group_primary thermostats — at most one allowed`,
+      );
+    }
+  }
 
   const shellyPasswordDevices: PasswordDevice[] = [
-    ...covers,
+    ...covers.filter(isShellyCover),
     ...plugs.filter((p) => p.vendor === "shelly"),
     ...meters,
   ];

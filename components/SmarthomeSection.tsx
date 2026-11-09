@@ -68,7 +68,26 @@ type MotionOverride = {
 };
 
 const OVERRIDE_GIVE_UP_MS = 15_000;
+/** Gira BLE commands can take much longer than Shelly RPC. */
+const OVERRIDE_GIVE_UP_GIRA_MS = 90_000;
 const OVERRIDE_MAX_MS = 180_000;
+
+function BluetoothIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M7 7l10 10-5 5V2l5 5L7 17" />
+    </svg>
+  );
+}
 
 function isIdleCoverState(state: CoverDeviceStatus["state"]): boolean {
   return (
@@ -165,7 +184,11 @@ function reconcileMotionOverrides(
       continue;
     }
     // Never started (or status never flipped) — drop after a grace period.
-    if (age > OVERRIDE_GIVE_UP_MS) {
+    // Gira covers often stay "idle" in ads until the GATT write finishes.
+    const giveUpMs = covers.some((c) => c.vendor === "gira")
+      ? OVERRIDE_GIVE_UP_GIRA_MS
+      : OVERRIDE_GIVE_UP_MS;
+    if (age > giveUpMs) {
       delete next[id];
       changed = true;
     }
@@ -337,13 +360,34 @@ function CoverRow({
   actionError?: string;
 }) {
   const motion = resolveCoverMotion(cover.state, motionOverride);
-  const controlsDisabled = !cover.online && cover.state === "unknown";
+  const unpaired = cover.vendor === "gira" && cover.paired === false;
+  const controlsDisabled =
+    unpaired || (!cover.online && cover.state === "unknown");
+  const pairedHint =
+    cover.vendor === "gira"
+      ? cover.paired === true
+        ? "gekoppelt"
+        : "nicht gekoppelt"
+      : null;
 
   return (
     <li className="border-t border-hairline pt-3 first:border-t-0 first:pt-0">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">{cover.name}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium text-foreground">{cover.name}</p>
+            {pairedHint ? (
+              <span
+                className={
+                  cover.paired === true ? "text-muted" : "text-muted/35"
+                }
+                title={pairedHint}
+                aria-label={pairedHint}
+              >
+                <BluetoothIcon className="h-3.5 w-3.5" />
+              </span>
+            ) : null}
+          </div>
           <p
             className={[
               "mt-0.5 text-xs",

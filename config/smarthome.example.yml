@@ -29,7 +29,10 @@ groups:
   - id: flur
     name: Flur & Küche
 
-# Shelly 2PM covers. `group` (required) must match a groups[].id.
+# Covers for the Rollos section. `group` (required) must match a groups[].id.
+# vendor: shelly (default) — Shelly 2PM; needs `ip` (+ optional coverId/password).
+# vendor: gira — Gira System 3000 cover/timer (e.g. 536727) via gira-ble-api;
+#   `id` must match the proxy covers[].id. Do not set ip/coverId/password.
 covers:
   - id: dg-ost
     name: DG Ost
@@ -61,6 +64,10 @@ covers:
     name: EG Straße
     ip: 192.168.0.122
     coverId: 0
+    group: eg
+  - id: eg-living-blind
+    name: Wohnzimmer Jalousie
+    vendor: gira
     group: eg
 
 # LEDVANCE Smart+ WiFi (Tuya local). `group` must match a groups[].id.
@@ -146,17 +153,21 @@ sensors:
 
 # Gira System 3000 thermostats (gira-ble-api). `id` must match the proxy.
 # `group` may share any groups[].id (e.g. dg / og1 / eg). Optional `name`
-# overrides the proxy label. Live state comes from GIRA_BLE_API_URL.
+# overrides the proxy label. Optional `group_primary: true` (at most one per
+# group) shows that thermostat’s Ist on the collapsed Heizung group header.
+# Live state comes from GIRA_BLE_API_URL.
 thermostats:
   - id: dg-office
     name: Arbeitszimmer
     group: dg
+    group_primary: true
   - id: og1-kids
     name: Kinderzimmer
     group: og1
   - id: eg-living
     name: Wohnzimmer
     group: eg
+    group_primary: true
 
 # Shelly Pro 3EM. The first meter is used for Hausverbrauch on the PV tab.
 # If a Growatt NOAH uses this meter for Smart Self-Consumption, keep Shelly

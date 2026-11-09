@@ -35,13 +35,24 @@ import {
   findLightGroup,
   findPlug,
   getSmarthomeConfig,
+  isGiraCover,
   lightGroups,
   visiblePlugs,
   type SmarthomeConfig,
   type SmarthomeCoverConfig,
+  type SmarthomeGiraCoverConfig,
   type SmarthomeLampConfig,
   type SmarthomePlugConfig,
+  type SmarthomeShellyCoverConfig,
 } from "./smarthome-config";
+import {
+  commandGiraCover,
+  GiraBleError,
+  isGiraBleConfigured,
+  listGiraCovers,
+  type GiraCover,
+  type GiraCoverAction,
+} from "./gira-ble";
 
 const STATUS_CACHE_KEY = "smarthome:status";
 
@@ -72,10 +83,14 @@ export type CoverDeviceStatus = {
   id: string;
   name: string;
   groupId: string;
+  /** shelly (LAN) or gira (BLE proxy). */
+  vendor: "shelly" | "gira";
   online: boolean;
   state: CoverMotion;
-  /** 0 = zu, 100 = auf (Shelly current_pos), null if unknown. */
+  /** 0 = zu, 100 = auf (Shelly / gira-ble-api), null if unknown. */
   positionPct: number | null;
+  /** Gira bond status; absent for Shelly. */
+  paired?: boolean | null;
   error?: string;
 };
 
@@ -198,6 +213,48 @@ function coverRpcMethod(action: CoverAction): string {
   }
 }
 
+function coverActionToGira(action: CoverAction): GiraCoverAction {
+  switch (action) {
+    case "open":
+      return "up";
+    case "close":
+      return "down";
+    case "stop":
+      return "stop";
+  }
+}
+
+function giraCoverMotion(positionPct: number | null): CoverMotion {
+  if (positionPct === null) return "unknown";
+  if (positionPct >= 100) return "open";
+  if (positionPct <= 0) return "closed";
+  return "stopped";
+}
+
+function giraCoverErrorMessage(code: string | undefined, fallback: string): string {
+  switch (code) {
+    case "ble_timeout":
+    case "timeout":
+      return "BLE-Timeout — Rollo antwortet nicht";
+    case "not_paired":
+      return "Nicht gekoppelt";
+    case "ble_error":
+      return "BLE-Fehler";
+    case "ble_disabled":
+      return "BLE deaktiviert am Proxy";
+    case "not_found":
+      return "Rollo nicht am Proxy gefunden";
+    case "unauthorized":
+      return "Proxy-Auth fehlgeschlagen";
+    case "not_configured":
+      return "GIRA_BLE_API_URL nicht gesetzt";
+    case "unreachable":
+      return "Gira-Proxy nicht erreichbar";
+    default:
+      return fallback || "Rollo nicht erreichbar";
+  }
+}
+
 function lampCredentials(lamp: SmarthomeLampConfig): TuyaLightCredentials {
   return {
     ip: lamp.ip,
@@ -207,8 +264,8 @@ function lampCredentials(lamp: SmarthomeLampConfig): TuyaLightCredentials {
   };
 }
 
-async function readCoverStatus(
-  cover: SmarthomeCoverConfig,
+async function readShellyCoverStatus(
+  cover: SmarthomeShellyCoverConfig,
   groupId: string,
 ): Promise<CoverDeviceStatus> {
   try {
@@ -224,6 +281,7 @@ async function readCoverStatus(
       id: cover.id,
       name: cover.name,
       groupId,
+      vendor: "shelly",
       online: true,
       state: normalizeCoverState(status.state),
       positionPct: position,
@@ -233,6 +291,7 @@ async function readCoverStatus(
       id: cover.id,
       name: cover.name,
       groupId,
+      vendor: "shelly",
       online: false,
       state: "unknown",
       positionPct: null,
@@ -244,6 +303,86 @@ async function readCoverStatus(
             : "Cover nicht erreichbar",
     };
   }
+}
+
+function giraCoverToStatus(
+  cover: SmarthomeGiraCoverConfig,
+  groupId: string,
+  live: GiraCover | undefined,
+  listError?: string,
+): CoverDeviceStatus {
+  if (!isGiraBleConfigured()) {
+    return {
+      id: cover.id,
+      name: cover.name,
+      groupId,
+      vendor: "gira",
+      online: false,
+      state: "unknown",
+      positionPct: null,
+      paired: null,
+      error: "GIRA_BLE_API_URL nicht gesetzt",
+    };
+  }
+
+  if (listError) {
+    return {
+      id: cover.id,
+      name: cover.name,
+      groupId,
+      vendor: "gira",
+      online: false,
+      state: "unknown",
+      positionPct: null,
+      paired: null,
+      error: listError,
+    };
+  }
+
+  if (!live) {
+    return {
+      id: cover.id,
+      name: cover.name,
+      groupId,
+      vendor: "gira",
+      online: false,
+      state: "unknown",
+      positionPct: null,
+      paired: null,
+      error: "Nicht am Gira-Proxy gefunden",
+    };
+  }
+
+  if (live.paired === false) {
+    return {
+      id: cover.id,
+      name: cover.name,
+      groupId,
+      vendor: "gira",
+      online: false,
+      state: "unknown",
+      positionPct: live.position_pct,
+      paired: false,
+      error: live.error ?? "Nicht gekoppelt",
+    };
+  }
+
+  const online = live.online;
+  return {
+    id: cover.id,
+    name: cover.name,
+    groupId,
+    vendor: "gira",
+    online,
+    state: online ? giraCoverMotion(live.position_pct) : "unknown",
+    positionPct: live.position_pct,
+    paired: live.paired,
+    ...(live.error
+      ? { error: live.error }
+      : online
+        ? {}
+        : { error: "offline" }),
+  };
 }
 
 function plugErrorMessage(error: unknown): string {
@@ -366,28 +505,65 @@ function buildLightGroupStatus(
   };
 }
 
+async function loadGiraCoverMap(
+  config: SmarthomeConfig,
+): Promise<{ byId: Map<string, GiraCover>; listError?: string }> {
+  const needsGira = coverGroups(config).some((g) =>
+    g.covers.some((c) => isGiraCover(c)),
+  );
+  if (!needsGira) return { byId: new Map() };
+  if (!isGiraBleConfigured()) return { byId: new Map() };
+
+  try {
+    const list = await listGiraCovers();
+    return { byId: new Map(list.map((c) => [c.id, c])) };
+  } catch (error) {
+    const listError =
+      error instanceof GiraBleError
+        ? giraCoverErrorMessage(error.code, error.message)
+        : error instanceof Error
+          ? error.message
+          : "Gira-Proxy nicht erreichbar";
+    return { byId: new Map(), listError };
+  }
+}
+
 async function loadSnapshot(config: SmarthomeConfig): Promise<{
   groups: SmarthomeGroupStatus[];
   lightGroups: SmarthomeLightGroupStatus[];
   plugs: PlugDeviceStatus[];
 }> {
-  const coverGroupPromises = coverGroups(config).map(async (group) => {
-    const covers = await Promise.all(
-      group.covers.map((cover) => readCoverStatus(cover, group.id)),
-    );
-    return { id: group.id, name: group.name, covers };
-  });
+  const giraPromise = loadGiraCoverMap(config);
 
   const lightGroupPromises = lightGroups(config).map(async (group) => {
     const lamps = await Promise.all(group.lamps.map((lamp) => readLampStatus(lamp)));
     return buildLightGroupStatus(group.id, group.name, lamps);
   });
 
-  const [groups, lightGroupStatuses, plugs] = await Promise.all([
-    Promise.all(coverGroupPromises),
+  const [gira, lightGroupStatuses, plugs] = await Promise.all([
+    giraPromise,
     Promise.all(lightGroupPromises),
     Promise.all(visiblePlugs(config).map((plug) => readPlugStatus(plug))),
   ]);
+
+  const groups = await Promise.all(
+    coverGroups(config).map(async (group) => {
+      const covers = await Promise.all(
+        group.covers.map((cover) => {
+          if (isGiraCover(cover)) {
+            return giraCoverToStatus(
+              cover,
+              group.id,
+              gira.byId.get(cover.id),
+              gira.listError,
+            );
+          }
+          return readShellyCoverStatus(cover, group.id);
+        }),
+      );
+      return { id: group.id, name: group.name, covers };
+    }),
+  );
 
   return { groups, lightGroups: lightGroupStatuses, plugs };
 }
@@ -442,9 +618,11 @@ export async function getSmarthomeSnapshot(
           id: cover.id,
           name: cover.name,
           groupId: group.id,
+          vendor: cover.vendor,
           online: false,
           state: "unknown" as const,
           positionPct: null,
+          ...(isGiraCover(cover) ? { paired: null as boolean | null } : {}),
           error: "Platzhalter — config/smarthome.yml anlegen",
         })),
       })),
@@ -534,6 +712,17 @@ async function runCoverAction(
   action: CoverAction,
 ): Promise<DeviceActionResult> {
   try {
+    if (isGiraCover(cover)) {
+      if (!isGiraBleConfigured()) {
+        return {
+          id: cover.id,
+          ok: false,
+          error: "GIRA_BLE_API_URL nicht gesetzt",
+        };
+      }
+      await commandGiraCover(cover.id, coverActionToGira(action));
+      return { id: cover.id, ok: true };
+    }
     await shellyRpc(cover.ip, coverRpcMethod(action), { id: cover.coverId });
     return { id: cover.id, ok: true };
   } catch (error) {
@@ -541,7 +730,11 @@ async function runCoverAction(
       id: cover.id,
       ok: false,
       error:
-        error instanceof Error ? error.message : "Cover-Befehl fehlgeschlagen",
+        error instanceof GiraBleError
+          ? giraCoverErrorMessage(error.code, error.message)
+          : error instanceof Error
+            ? error.message
+            : "Cover-Befehl fehlgeschlagen",
     };
   }
 }
