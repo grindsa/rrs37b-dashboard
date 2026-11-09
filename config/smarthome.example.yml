@@ -29,7 +29,9 @@ groups:
   - id: flur
     name: Flur & Küche
 
-# Covers for the Rollos section. `group` (required) must match a groups[].id.
+# Covers for the Rollos section.
+# `group` — optional; must match a groups[].id when set. Omit it to show the
+# cover as its own top-level Rollos section (group-level ↑/↓ only, no expand).
 # vendor: shelly (default) — Shelly 2PM; needs `ip` (+ optional coverId/password).
 # vendor: gira — Gira System 3000 cover/timer (e.g. 536727) via gira-ble-api;
 #   `id` must match the proxy covers[].id. Do not set ip/coverId/password.
@@ -66,9 +68,9 @@ covers:
     coverId: 0
     group: eg
   - id: eg-living-blind
-    name: Wohnzimmer Jalousie
+    name: Erdgeschoss
     vendor: gira
-    group: eg
+    # no group → singleton Rollos section
 
 # LEDVANCE Smart+ WiFi (Tuya local). `group` must match a groups[].id.
 # Obtain device_id + local_key via tuya-cli wizard, tinytuya wizard, or a

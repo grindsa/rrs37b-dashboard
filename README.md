@@ -323,9 +323,9 @@ covers:
     group: dg
     password: "…"        # optional, else SHELLY_RPC_PASSWORD
   - id: eg-living-blind
-    name: Wohnzimmer Jalousie
+    name: Erdgeschoss
     vendor: gira         # Gira 5367xx via GIRA_BLE_API_URL; no ip/password
-    group: eg
+    # omit group → own Rollos section (↑/↓ at group level, no expand)
 lamps:
   - id: stehlampe
     name: Stehlampe
@@ -369,6 +369,7 @@ meters:
 - Groups are untyped (`id` + `name` only). Do not nest devices under groups — use top-level `covers` / `lamps` / `thermostats` with `group: <id>`. A leftover `type:` on a group is ignored (logged once).
 - `coverId` / `switchId` / `emId` default to `0` when omitted.
 - Cover `vendor` is `shelly` (default) or `gira`. Gira covers share `GIRA_BLE_API_URL` / `GIRA_BLE_API_TOKEN` with Heizung; `id` must match gira-ble-api `covers[].id`. Do not set `ip` / `coverId` / `password` on Gira covers.
+- Cover `group` is optional. Omit it to show the cover as its own Rollos section (same ↑/↓ as a floor header, no expandable detail list). Standalone cover `id` must not collide with a `groups[].id`.
 - Lamp cycle maps modes to Tuya DPs `20` (on/off) and `22` (brightness 10–1000). On uses `on_percent` (default 100). Dim uses each lamp’s `dim_percent`; if omitted, that lamp turns **off** on dim (useful in mixed groups). A single lamp without `dim_percent` cycles off → on → off.
 - Plug `vendor` is `shelly` (default), `tapo`, or `fsapi`. Sensor `gateway` plugs must be Shelly (Tapo/FSAPI as gateway is a config error).
 - `password` is optional on Shelly covers, plugs and meters. Without it, `SHELLY_RPC_PASSWORD` is used; the server log lists which devices still fall back. Entries sharing an IP must not have different passwords. Do not set `password` on Tapo or FSAPI plugs.

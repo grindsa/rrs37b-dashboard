@@ -30,7 +30,11 @@ export type SmarthomeShellyCoverConfig = {
   ip: string;
   /** Shelly Cover component id (usually 0). */
   coverId: number;
-  groupId: string;
+  /**
+   * Floor/room group id, or `null` when `group` is omitted in YAML —
+   * then the cover is shown as its own Rollos section (standalone).
+   */
+  groupId: string | null;
   password?: string;
 };
 
@@ -42,7 +46,8 @@ export type SmarthomeGiraCoverConfig = {
   id: string;
   name: string;
   vendor: "gira";
-  groupId: string;
+  /** See {@link SmarthomeShellyCoverConfig.groupId}. */
+  groupId: string | null;
 };
 
 export type SmarthomeCoverConfig =
@@ -84,6 +89,11 @@ export type SmarthomeLampConfig = {
 export type SmarthomeGroupConfig = {
   id: string;
   name: string;
+  /**
+   * True when this section was synthesized from a cover with no YAML `group`
+   * (singleton Rollos row; id/name come from that cover).
+   */
+  standalone: boolean;
   /** Covers in this group (file order); may be empty. */
   covers: SmarthomeCoverConfig[];
   /** Lamps in this group (file order); may be empty. */
@@ -407,18 +417,32 @@ function hasForbiddenGiraCoverField(
   return value !== undefined && value !== null && value !== "";
 }
 
+function asOptionalCoverGroupId(
+  value: unknown,
+  pathLabel: string,
+  groupIds: ReadonlySet<string>,
+): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  const groupId = asString(value, pathLabel);
+  if (!groupIds.has(groupId)) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel} "${groupId}" is not defined under groups`,
+    );
+  }
+  return groupId;
+}
+
 function parseCover(
   raw: unknown,
   pathLabel: string,
   groupIds: ReadonlySet<string>,
 ): SmarthomeCoverConfig {
   const obj = asRecord(raw, pathLabel);
-  const groupId = asString(obj.group, `${pathLabel}.group`);
-  if (!groupIds.has(groupId)) {
-    throw new Error(
-      `${ERR_PREFIX}: ${pathLabel}.group "${groupId}" is not defined under groups`,
-    );
-  }
+  const groupId = asOptionalCoverGroupId(
+    obj.group,
+    `${pathLabel}.group`,
+    groupIds,
+  );
   const id = asString(obj.id, `${pathLabel}.id`);
   const name = asString(obj.name, `${pathLabel}.name`);
   const vendor = asCoverVendor(obj.vendor, `${pathLabel}.vendor`);
@@ -616,6 +640,14 @@ function parseConfig(parsed: unknown): ParseResult {
     parseCover(c, `covers[${i}]`, groupIds),
   );
   assertUnique(covers.map((c) => c.id), "cover id");
+  for (const cover of covers) {
+    if (cover.groupId !== null) continue;
+    if (groupIds.has(cover.id)) {
+      throw new Error(
+        `${ERR_PREFIX}: cover "${cover.id}" omits group but id collides with groups[].id — rename the cover or set group:`,
+      );
+    }
+  }
 
   const lamps = asArray(root.lamps, "lamps").map((l, i) =>
     parseLamp(l, `lamps[${i}]`, groupIds),
@@ -675,8 +707,20 @@ function parseConfig(parsed: unknown): ParseResult {
     groups.push({
       id: def.id,
       name: def.name,
+      standalone: false,
       covers: groupCovers,
       lamps: groupLamps,
+    });
+  }
+  // Covers without `group` become their own Rollos section (file order).
+  for (const cover of covers) {
+    if (cover.groupId !== null) continue;
+    groups.push({
+      id: cover.id,
+      name: cover.name,
+      standalone: true,
+      covers: [cover],
+      lamps: [],
     });
   }
 

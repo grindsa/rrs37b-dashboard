@@ -119,6 +119,8 @@ export type LampDeviceStatus = {
 export type SmarthomeGroupStatus = {
   id: string;
   name: string;
+  /** Cover with no YAML `group` — group-level controls only, no expand. */
+  standalone: boolean;
   covers: CoverDeviceStatus[];
 };
 
@@ -561,7 +563,12 @@ async function loadSnapshot(config: SmarthomeConfig): Promise<{
           return readShellyCoverStatus(cover, group.id);
         }),
       );
-      return { id: group.id, name: group.name, covers };
+      return {
+        id: group.id,
+        name: group.name,
+        standalone: group.standalone,
+        covers,
+      };
     }),
   );
 
@@ -614,6 +621,7 @@ export async function getSmarthomeSnapshot(
       groups: coverGroups(loaded.config).map((group) => ({
         id: group.id,
         name: group.name,
+        standalone: group.standalone,
         covers: group.covers.map((cover) => ({
           id: cover.id,
           name: cover.name,

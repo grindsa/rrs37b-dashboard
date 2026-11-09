@@ -432,49 +432,117 @@ function GroupBlock({
   const [expanded, setExpanded] = useState(false);
   const groupMotion = resolveGroupMotion(group.covers, groupMotionOverride);
   const coverCount = group.covers.length;
+  const standalone = group.standalone;
+  const solo = group.covers[0];
+  const statusLine = standalone
+    ? solo
+      ? coverStatusLabel(solo)
+      : null
+    : `${coverCount === 1 ? "1 Rollo" : `${coverCount} Rollos`}${
+        expanded ? "" : " · antippen für Details"
+      }`;
+  const statusWarning = standalone
+    ? Boolean(solo && !solo.online)
+    : false;
+  const groupError =
+    actionErrors[`group:${group.id}`] ??
+    (standalone && solo
+      ? actionErrors[`cover:${solo.id}`]
+      : undefined);
 
   return (
     <section aria-labelledby={`smarthome-group-${group.id}`}>
       <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          aria-expanded={expanded}
-          aria-controls={`smarthome-group-covers-${group.id}`}
-          onClick={() => setExpanded((v) => !v)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-        >
-          <span className="text-xs text-muted" aria-hidden>
-            {expanded ? "▾" : "▸"}
-          </span>
-          <span className="min-w-0">
-            <span
-              id={`smarthome-group-${group.id}`}
-              className="block text-base font-semibold tracking-tight"
-            >
-              {group.name}
+        {standalone ? (
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            {/* Match expandable group chevron gutter so names align. */}
+            <span className="invisible text-xs" aria-hidden>
+              ▸
             </span>
-            <span className="mt-0.5 block text-xs text-muted">
-              {coverCount === 1 ? "1 Rollo" : `${coverCount} Rollos`}
-              {expanded ? "" : " · antippen für Details"}
+            <span className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span
+                  id={`smarthome-group-${group.id}`}
+                  className="block text-base font-semibold tracking-tight"
+                >
+                  {group.name}
+                </span>
+                {solo?.vendor === "gira" ? (
+                  <span
+                    className={
+                      solo.paired === true ? "text-muted" : "text-muted/35"
+                    }
+                    title={
+                      solo.paired === true ? "gekoppelt" : "nicht gekoppelt"
+                    }
+                    aria-label={
+                      solo.paired === true ? "gekoppelt" : "nicht gekoppelt"
+                    }
+                  >
+                    <BluetoothIcon className="h-3.5 w-3.5" />
+                  </span>
+                ) : null}
+              </div>
+              {statusLine ? (
+                <span
+                  className={[
+                    "mt-0.5 block text-xs",
+                    statusWarning ? "text-warning" : "text-muted",
+                  ].join(" ")}
+                >
+                  {statusLine}
+                </span>
+              ) : null}
             </span>
-          </span>
-        </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            aria-controls={`smarthome-group-covers-${group.id}`}
+            onClick={() => setExpanded((v) => !v)}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          >
+            <span className="text-xs text-muted" aria-hidden>
+              {expanded ? "▾" : "▸"}
+            </span>
+            <span className="min-w-0">
+              <span
+                id={`smarthome-group-${group.id}`}
+                className="block text-base font-semibold tracking-tight"
+              >
+                {group.name}
+              </span>
+              <span className="mt-0.5 block text-xs text-muted">
+                {statusLine}
+              </span>
+            </span>
+          </button>
+        )}
         <CoverControlPill
           motion={groupMotion}
           onAction={(action) => onGroupAction(group.id, action)}
-          openLabel={`${group.name} alle auf`}
-          closeLabel={`${group.name} alle zu`}
+          disabled={
+            standalone &&
+            solo != null &&
+            (solo.paired === false ||
+              (!solo.online && solo.state === "unknown"))
+          }
+          openLabel={
+            standalone ? `${group.name} auf` : `${group.name} alle auf`
+          }
+          closeLabel={
+            standalone ? `${group.name} zu` : `${group.name} alle zu`
+          }
           stopOpenLabel={`${group.name} stoppen`}
           stopCloseLabel={`${group.name} stoppen`}
         />
       </div>
-      {actionErrors[`group:${group.id}`] ? (
-        <p className="mt-2 text-xs text-warning">
-          {actionErrors[`group:${group.id}`]}
-        </p>
+      {groupError ? (
+        <p className="mt-2 text-xs text-warning">{groupError}</p>
       ) : null}
 
-      {expanded ? (
+      {!standalone && expanded ? (
         <ul
           id={`smarthome-group-covers-${group.id}`}
           className="mt-4 flex flex-col gap-3"
