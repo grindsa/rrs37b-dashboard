@@ -170,6 +170,52 @@ body {
   border-top: 1px solid var(--hairline);
 }
 
+/**
+ * BVG departure rows — soft wash by line family + destination shade.
+ * Same line → neighbouring shades of one family; different lines → other families.
+ */
+.bvg-dep-row {
+  border-radius: 0.55rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid transparent;
+}
+
+.bvg-dep-tint-0-0 {
+  background: color-mix(in oklab, var(--accent) 16%, var(--background));
+  border-color: color-mix(in oklab, var(--accent) 22%, transparent);
+}
+.bvg-dep-tint-0-1 {
+  background: color-mix(in oklab, var(--accent) 8%, var(--background));
+  border-color: color-mix(in oklab, var(--accent) 14%, transparent);
+}
+
+.bvg-dep-tint-1-0 {
+  background: color-mix(in oklab, var(--muted) 18%, var(--background));
+  border-color: color-mix(in oklab, var(--muted) 24%, transparent);
+}
+.bvg-dep-tint-1-1 {
+  background: color-mix(in oklab, var(--muted) 10%, var(--background));
+  border-color: color-mix(in oklab, var(--muted) 16%, transparent);
+}
+
+.bvg-dep-tint-2-0 {
+  background: color-mix(in oklab, var(--background-accent) 62%, var(--background));
+  border-color: color-mix(in oklab, var(--foreground) 12%, transparent);
+}
+.bvg-dep-tint-2-1 {
+  background: color-mix(in oklab, var(--background-accent) 38%, var(--background));
+  border-color: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+
+.bvg-dep-tint-3-0 {
+  background: color-mix(in oklab, var(--accent-soft) 48%, var(--background));
+  border-color: color-mix(in oklab, var(--accent-soft) 60%, transparent);
+}
+.bvg-dep-tint-3-1 {
+  background: color-mix(in oklab, var(--accent-soft) 28%, var(--background));
+  border-color: color-mix(in oklab, var(--accent-soft) 40%, transparent);
+}
+
 @keyframes fade-up {
   from {
     opacity: 0;

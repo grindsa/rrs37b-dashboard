@@ -38,6 +38,53 @@ type NearbyInfo = {
   note?: string;
 };
 
+const BVG_LINE_FAMILY_COUNT = 4;
+const BVG_DEST_SHADE_COUNT = 2;
+
+function normalizeKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+type DepartureTintMaps = {
+  lineFamily: Map<string, number>;
+  destShadeByLine: Map<string, Map<string, number>>;
+};
+
+function createDepartureTintMaps(): DepartureTintMaps {
+  return { lineFamily: new Map(), destShadeByLine: new Map() };
+}
+
+/**
+ * Same line → same color family, destinations get neighbouring shades.
+ * Different lines → other families (first-seen order per stop).
+ */
+function departureTintClass(
+  line: string,
+  direction: string,
+  maps: DepartureTintMaps,
+): string {
+  const lineKey = normalizeKey(line) || "?";
+  let family = maps.lineFamily.get(lineKey);
+  if (family == null) {
+    family = maps.lineFamily.size % BVG_LINE_FAMILY_COUNT;
+    maps.lineFamily.set(lineKey, family);
+  }
+
+  let destMap = maps.destShadeByLine.get(lineKey);
+  if (!destMap) {
+    destMap = new Map();
+    maps.destShadeByLine.set(lineKey, destMap);
+  }
+  const destKey = normalizeKey(direction) || "—";
+  let shade = destMap.get(destKey);
+  if (shade == null) {
+    shade = destMap.size % BVG_DEST_SHADE_COUNT;
+    destMap.set(destKey, shade);
+  }
+
+  return `bvg-dep-tint-${family}-${shade}`;
+}
+
 /** Less-useful short hops — keep visible but de-emphasized. */
 function isMinorDeparture(dep: BvgDeparture): boolean {
   const line = dep.line.trim().toUpperCase();
@@ -180,81 +227,88 @@ function Stops({
         .filter(Boolean)
         .join(" ")}
     >
-      {stops.map((stop) => (
-        <div key={stop.stopId}>
-          <h3 className="text-sm font-medium text-foreground">
-            {stop.stopName}
-          </h3>
-          <ul className="mt-3.5 flex flex-col gap-3.5">
-            {stop.departures.length === 0 ? (
-              <li className="text-sm text-muted">Keine Abfahrten in 30 Min</li>
-            ) : (
-              stop.departures.map((dep, index) => {
-                const mins = minutesUntil(dep.when, nowMs);
-                const delay = formatDelay(dep.delaySeconds, dep.cancelled);
-                const clockIso = dep.when ?? dep.plannedWhen;
-                const minor = isMinorDeparture(dep);
-                return (
-                  <li
-                    key={`${dep.line}-${dep.direction}-${dep.plannedWhen}-${index}`}
-                    className={[
-                      "grid grid-cols-[3rem_1fr_auto] items-baseline gap-3",
-                      minor ? "opacity-45" : undefined,
-                    ]
-                      .filter(Boolean)
-                      .join(" ")}
-                  >
-                    <span
+      {stops.map((stop) => {
+        const tintMaps = createDepartureTintMaps();
+        return (
+          <div key={stop.stopId}>
+            <h3 className="subsection-heading">{stop.stopName}</h3>
+            <ul className="mt-3.5 flex flex-col gap-1.5">
+              {stop.departures.length === 0 ? (
+                <li className="text-sm text-muted">Keine Abfahrten in 30 Min</li>
+              ) : (
+                stop.departures.map((dep, index) => {
+                  const mins = minutesUntil(dep.when, nowMs);
+                  const delay = formatDelay(dep.delaySeconds, dep.cancelled);
+                  const clockIso = dep.when ?? dep.plannedWhen;
+                  const minor = isMinorDeparture(dep);
+                  const tintClass = departureTintClass(
+                    dep.line,
+                    dep.direction,
+                    tintMaps,
+                  );
+                  return (
+                    <li
+                      key={`${dep.line}-${dep.direction}-${dep.plannedWhen}-${index}`}
                       className={[
-                        "font-semibold tabular-nums",
-                        minor ? "text-muted" : "text-accent",
-                      ].join(" ")}
+                        "bvg-dep-row grid grid-cols-[3rem_1fr_auto] items-baseline gap-3",
+                        tintClass,
+                        minor ? "opacity-45" : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(" ")}
                     >
-                      {dep.line}
-                    </span>
-                    <div className="min-w-0">
-                      <p
+                      <span
                         className={[
-                          "truncate text-sm",
+                          "font-semibold tabular-nums",
+                          minor ? "text-muted" : "text-accent",
+                        ].join(" ")}
+                      >
+                        {dep.line}
+                      </span>
+                      <div className="min-w-0">
+                        <p
+                          className={[
+                            "truncate text-sm",
+                            minor ? "text-muted" : undefined,
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          {dep.direction}
+                        </p>
+                        {delay.label ? (
+                          <p
+                            className={`text-xs ${
+                              minor ? "text-muted" : toneClass[delay.tone]
+                            }`}
+                          >
+                            {delay.label}
+                          </p>
+                        ) : null}
+                      </div>
+                      <div
+                        className={[
+                          "text-right tabular-nums",
                           minor ? "text-muted" : undefined,
                         ]
                           .filter(Boolean)
                           .join(" ")}
                       >
-                        {dep.direction}
-                      </p>
-                      {delay.label ? (
-                        <p
-                          className={`text-xs ${
-                            minor ? "text-muted" : toneClass[delay.tone]
-                          }`}
-                        >
-                          {delay.label}
+                        <p className="text-sm font-semibold">
+                          {clockIso ? formatHourLabel(clockIso) : "—"}
                         </p>
-                      ) : null}
-                    </div>
-                    <div
-                      className={[
-                        "text-right tabular-nums",
-                        minor ? "text-muted" : undefined,
-                      ]
-                        .filter(Boolean)
-                        .join(" ")}
-                    >
-                      <p className="text-sm font-semibold">
-                        {clockIso ? formatHourLabel(clockIso) : "—"}
-                      </p>
-                      <p className="text-xs text-muted">
-                        {relativeLabel(mins, dep.cancelled)}
-                      </p>
-                    </div>
-                  </li>
-                );
-              })
-            )}
-          </ul>
-        </div>
-      ))}
+                        <p className="text-xs text-muted">
+                          {relativeLabel(mins, dep.cancelled)}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })
+              )}
+            </ul>
+          </div>
+        );
+      })}
     </div>
   );
 }
