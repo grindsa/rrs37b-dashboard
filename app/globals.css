@@ -73,6 +73,98 @@ body {
   color: var(--muted);
 }
 
+/** In-tab category titles (Rollos / Lampen / …) — accent, not body black. */
+.subsection-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.subsection-heading::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  min-width: 1.5rem;
+  background: color-mix(in oklab, var(--accent) 32%, var(--hairline));
+}
+
+/** Floor / room groups in Smarthome + Heizung — soft header band + drawer. */
+.device-group {
+  padding: 0.35rem 0;
+}
+
+.device-group + .device-group {
+  margin-top: 0.45rem;
+}
+
+.device-group-band {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.7rem;
+  background: color-mix(in oklab, var(--accent) 8%, var(--surface));
+  border: 1px solid color-mix(in oklab, var(--accent) 16%, var(--hairline));
+}
+
+.device-group.is-open > .device-group-band {
+  border-radius: 0.7rem 0.7rem 0 0;
+  border-bottom-color: transparent;
+}
+
+.device-group-title {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: color-mix(in oklab, var(--foreground) 70%, var(--accent));
+}
+
+.device-group-meta {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.device-group-meta.is-warning {
+  color: var(--warning);
+}
+
+.device-group-chevron {
+  display: inline-flex;
+  width: 1.15rem;
+  height: 1.15rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.3rem;
+  background: color-mix(in oklab, var(--accent) 16%, transparent);
+  color: var(--accent);
+  font-size: 0.6rem;
+  line-height: 1;
+}
+
+.device-group-chevron.is-spacer {
+  visibility: hidden;
+}
+
+.device-group-body {
+  margin: 0 0.15rem;
+  padding: 0.7rem 0.75rem 0.2rem;
+  border: 1px solid color-mix(in oklab, var(--accent) 16%, var(--hairline));
+  border-top: 0;
+  border-radius: 0 0 0.65rem 0.65rem;
+  background: color-mix(in oklab, var(--background) 72%, var(--surface));
+}
+
 .section-divider {
   border: 0;
   border-top: 1px solid var(--hairline);

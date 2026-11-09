@@ -450,20 +450,24 @@ function GroupBlock({
       ? actionErrors[`cover:${solo.id}`]
       : undefined);
 
+  const open = !standalone && expanded;
+
   return (
-    <section aria-labelledby={`smarthome-group-${group.id}`}>
-      <div className="flex items-center justify-between gap-3">
+    <section
+      className={["device-group", open ? "is-open" : ""].filter(Boolean).join(" ")}
+      aria-labelledby={`smarthome-group-${group.id}`}
+    >
+      <div className="device-group-band">
         {standalone ? (
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            {/* Match expandable group chevron gutter so names align. */}
-            <span className="invisible text-xs" aria-hidden>
+          <div className="flex min-w-0 flex-1 items-center gap-2.5">
+            <span className="device-group-chevron is-spacer" aria-hidden>
               ▸
             </span>
             <span className="min-w-0">
               <div className="flex items-center gap-1.5">
                 <span
                   id={`smarthome-group-${group.id}`}
-                  className="block text-base font-semibold tracking-tight"
+                  className="device-group-title"
                 >
                   {group.name}
                 </span>
@@ -486,9 +490,11 @@ function GroupBlock({
               {statusLine ? (
                 <span
                   className={[
-                    "mt-0.5 block text-xs",
-                    statusWarning ? "text-warning" : "text-muted",
-                  ].join(" ")}
+                    "device-group-meta",
+                    statusWarning ? "is-warning" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                 >
                   {statusLine}
                 </span>
@@ -501,21 +507,19 @@ function GroupBlock({
             aria-expanded={expanded}
             aria-controls={`smarthome-group-covers-${group.id}`}
             onClick={() => setExpanded((v) => !v)}
-            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
           >
-            <span className="text-xs text-muted" aria-hidden>
+            <span className="device-group-chevron" aria-hidden>
               {expanded ? "▾" : "▸"}
             </span>
             <span className="min-w-0">
               <span
                 id={`smarthome-group-${group.id}`}
-                className="block text-base font-semibold tracking-tight"
+                className="device-group-title"
               >
                 {group.name}
               </span>
-              <span className="mt-0.5 block text-xs text-muted">
-                {statusLine}
-              </span>
+              <span className="device-group-meta">{statusLine}</span>
             </span>
           </button>
         )}
@@ -539,13 +543,13 @@ function GroupBlock({
         />
       </div>
       {groupError ? (
-        <p className="mt-2 text-xs text-warning">{groupError}</p>
+        <p className="mt-2 px-1 text-xs text-warning">{groupError}</p>
       ) : null}
 
-      {!standalone && expanded ? (
+      {open ? (
         <ul
           id={`smarthome-group-covers-${group.id}`}
-          className="mt-4 flex flex-col gap-3"
+          className="device-group-body flex flex-col gap-3"
         >
           {group.covers.map((cover) => (
             <CoverRow
@@ -690,26 +694,31 @@ function LightGroupBlock({
     group.lamps.some((l) => busyIds.has(`lamp:${l.id}`));
 
   return (
-    <section aria-labelledby={`smarthome-light-group-${group.id}`}>
-      <div className="flex items-center justify-between gap-3">
+    <section
+      className={["device-group", expanded ? "is-open" : ""]
+        .filter(Boolean)
+        .join(" ")}
+      aria-labelledby={`smarthome-light-group-${group.id}`}
+    >
+      <div className="device-group-band">
         <button
           type="button"
           aria-expanded={expanded}
           aria-controls={`smarthome-light-group-lamps-${group.id}`}
           onClick={() => setExpanded((v) => !v)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
         >
-          <span className="text-xs text-muted" aria-hidden>
+          <span className="device-group-chevron" aria-hidden>
             {expanded ? "▾" : "▸"}
           </span>
           <span className="min-w-0">
             <span
               id={`smarthome-light-group-${group.id}`}
-              className="block text-base font-semibold tracking-tight"
+              className="device-group-title"
             >
               {group.name}
             </span>
-            <span className="mt-0.5 block text-xs text-muted">
+            <span className="device-group-meta">
               {lightGroupSummaryLabel(lampCount, group.mode)}
               {expanded ? "" : " · antippen für Details"}
             </span>
@@ -736,7 +745,7 @@ function LightGroupBlock({
         />
       </div>
       {actionErrors[`light-group:${group.id}`] ? (
-        <p className="mt-2 text-xs text-warning">
+        <p className="mt-2 px-1 text-xs text-warning">
           {actionErrors[`light-group:${group.id}`]}
         </p>
       ) : null}
@@ -744,7 +753,7 @@ function LightGroupBlock({
       {expanded ? (
         <ul
           id={`smarthome-light-group-lamps-${group.id}`}
-          className="mt-4 flex flex-col gap-3"
+          className="device-group-body flex flex-col gap-3"
         >
           {group.lamps.map((lamp) => (
             <LampRow
@@ -1386,19 +1395,24 @@ export function SmarthomeSection({
       </div>
 
       {data?.groups.length ? (
-        <div className="mt-6 flex flex-col gap-8">
-          {data.groups.map((group) => (
-            <GroupBlock
-              key={group.id}
-              group={group}
-              onGroupAction={postGroup}
-              onCoverAction={postCover}
-              groupMotionOverride={groupMotionOverrides[group.id]}
-              coverMotionOverrides={coverMotionOverrides}
-              actionErrors={actionErrors}
-            />
-          ))}
-        </div>
+        <section className="mt-6" aria-labelledby="smarthome-covers-heading">
+          <h3 id="smarthome-covers-heading" className="subsection-heading">
+            Rollos
+          </h3>
+          <div className="mt-3 flex flex-col">
+            {data.groups.map((group) => (
+              <GroupBlock
+                key={group.id}
+                group={group}
+                onGroupAction={postGroup}
+                onCoverAction={postCover}
+                groupMotionOverride={groupMotionOverrides[group.id]}
+                coverMotionOverrides={coverMotionOverrides}
+                actionErrors={actionErrors}
+              />
+            ))}
+          </div>
+        </section>
       ) : state.status === "loading" ? (
         <p className="mt-5 text-sm text-muted">Laden…</p>
       ) : data?.lightGroups.length || data?.plugs.length ? null : (
@@ -1408,54 +1422,42 @@ export function SmarthomeSection({
       )}
 
       {data?.lightGroups.length ? (
-        <>
-          <hr className="section-divider mt-8" />
-          <section className="mt-6" aria-labelledby="smarthome-lights-heading">
-            <h3
-              id="smarthome-lights-heading"
-              className="text-base font-semibold tracking-tight"
-            >
-              Lampen
-            </h3>
-            <div className="mt-4 flex flex-col gap-8">
-              {data.lightGroups.map((group) => (
-                <LightGroupBlock
-                  key={group.id}
-                  group={group}
-                  busyIds={lightBusyIds}
-                  actionErrors={actionErrors}
-                  onGroupCycle={(id) => void postLightGroupCycle(id)}
-                  onLampCycle={(id) => void postLampCycle(id)}
-                />
-              ))}
-            </div>
-          </section>
-        </>
+        <section className="mt-8" aria-labelledby="smarthome-lights-heading">
+          <h3 id="smarthome-lights-heading" className="subsection-heading">
+            Lampen
+          </h3>
+          <div className="mt-3 flex flex-col">
+            {data.lightGroups.map((group) => (
+              <LightGroupBlock
+                key={group.id}
+                group={group}
+                busyIds={lightBusyIds}
+                actionErrors={actionErrors}
+                onGroupCycle={(id) => void postLightGroupCycle(id)}
+                onLampCycle={(id) => void postLampCycle(id)}
+              />
+            ))}
+          </div>
+        </section>
       ) : null}
 
       {data?.plugs.length ? (
-        <>
-          <hr className="section-divider mt-8" />
-          <section className="mt-6" aria-labelledby="smarthome-plugs-heading">
-            <h3
-              id="smarthome-plugs-heading"
-              className="text-base font-semibold tracking-tight"
-            >
-              Smarthomegeräte
-            </h3>
-            <ul className="mt-4 flex flex-col gap-4">
-              {data.plugs.map((plug) => (
-                <PlugRow
-                  key={plug.id}
-                  plug={plug}
-                  busy={plugBusyId === plug.id}
-                  error={actionErrors[`plug:${plug.id}`]}
-                  onToggle={(on) => void postPlug(plug.id, on)}
-                />
-              ))}
-            </ul>
-          </section>
-        </>
+        <section className="mt-8" aria-labelledby="smarthome-plugs-heading">
+          <h3 id="smarthome-plugs-heading" className="subsection-heading">
+            Smarthome-Geräte
+          </h3>
+          <ul className="mt-4 flex flex-col gap-4">
+            {data.plugs.map((plug) => (
+              <PlugRow
+                key={plug.id}
+                plug={plug}
+                busy={plugBusyId === plug.id}
+                error={actionErrors[`plug:${plug.id}`]}
+                onToggle={(on) => void postPlug(plug.id, on)}
+              />
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       {state.status === "error" && state.data ? (

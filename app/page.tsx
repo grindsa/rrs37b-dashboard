@@ -125,7 +125,7 @@ function Footer({ authenticated }: { authenticated: boolean }) {
 export default function Home() {
   return (
     <div className="flex flex-1 flex-col text-foreground">
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-5 py-7 sm:gap-8 sm:px-6 sm:py-10 md:max-w-3xl">
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 px-5 py-5 sm:gap-5 sm:px-6 sm:py-7 md:max-w-3xl">
         <Suspense fallback={<AuthGatedFallback />}>
           <AuthGatedHome />
         </Suspense>

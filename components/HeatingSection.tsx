@@ -285,26 +285,31 @@ function GroupBlock({
   const primary = group.thermostats.find((t) => t.groupPrimary);
 
   return (
-    <section aria-labelledby={`heating-group-${group.id}`}>
-      <div className="flex items-center justify-between gap-3">
+    <section
+      className={["device-group", expanded ? "is-open" : ""]
+        .filter(Boolean)
+        .join(" ")}
+      aria-labelledby={`heating-group-${group.id}`}
+    >
+      <div className="device-group-band">
         <button
           type="button"
           aria-expanded={expanded}
           aria-controls={`heating-group-thermostats-${group.id}`}
           onClick={() => setExpanded((v) => !v)}
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
         >
-          <span className="text-xs text-muted" aria-hidden>
+          <span className="device-group-chevron" aria-hidden>
             {expanded ? "▾" : "▸"}
           </span>
           <span className="min-w-0">
             <span
               id={`heating-group-${group.id}`}
-              className="block text-base font-semibold tracking-tight"
+              className="device-group-title"
             >
               {group.name}
             </span>
-            <span className="mt-0.5 block text-xs text-muted">
+            <span className="device-group-meta">
               {count === 1 ? "1 Thermostat" : `${count} Thermostate`}
               {count > 0 ? ` · ${onlineCount} online` : null}
               {expanded ? "" : " · antippen für Details"}
@@ -323,7 +328,7 @@ function GroupBlock({
       {expanded ? (
         <ul
           id={`heating-group-thermostats-${group.id}`}
-          className="mt-3 flex flex-col gap-3"
+          className="device-group-body flex flex-col gap-3"
         >
           {group.thermostats.map((t) => (
             <ThermostatRow
@@ -667,7 +672,7 @@ export function HeatingSection() {
       ) : null}
 
       {groups.length > 0 ? (
-        <div className="mt-5 flex flex-col gap-8">
+        <div className="mt-4 flex flex-col">
           {groups.map((group) => (
             <GroupBlock
               key={group.id}

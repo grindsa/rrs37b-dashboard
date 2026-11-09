@@ -164,11 +164,11 @@ export function DashboardTabs({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<DashboardTabId>("home");
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       <div
         role="tablist"
         aria-label="Bereich"
-        className="sticky top-0 z-20 -mx-5 flex items-center gap-0.5 bg-background/85 px-5 py-2 backdrop-blur-md sm:-mx-6 sm:px-6"
+        className="sticky top-0 z-20 -mx-5 flex items-center gap-0.5 bg-background/85 px-5 py-1.5 backdrop-blur-md sm:-mx-6 sm:px-6"
       >
         <div className="inline-flex w-full items-center gap-0.5 rounded-lg bg-surface p-0.5 text-sm font-medium">
           {TABS.map((tab) => {
