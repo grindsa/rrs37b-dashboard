@@ -103,10 +103,49 @@ function humanizeTuyaError(raw: string): string {
   if (text.includes("timeout") || text.includes("timed out")) {
     return "Tuya timeout — Lampe erreichbar? Smart+ App geschlossen?";
   }
-  if (text.includes("econnrefused") || text.includes("ehostunreach")) {
+  if (
+    text.includes("econnrefused") ||
+    text.includes("ehostunreach") ||
+    text.includes("enetunreach") ||
+    text.includes("etimedout") ||
+    text.includes("enotfound")
+  ) {
     return "Tuya nicht erreichbar — IP / WLAN prüfen";
   }
   return raw;
+}
+
+type TuyDevice = InstanceType<typeof TuyAPI>;
+
+type TuyDeviceClient = {
+  destroy: () => void;
+  destroyed?: boolean;
+};
+
+type TuyDeviceInternals = TuyDevice & {
+  _connectTimeout?: number;
+  client?: TuyDeviceClient;
+};
+
+/**
+ * tuyapi.disconnect() returns early unless the session reached "connected".
+ * After our own timeout the TCP handshake may still be in flight — destroy the
+ * socket so late timeout/EHOSTUNREACH events cannot outlive the call.
+ */
+function forceCloseDevice(device: TuyDevice): void {
+  try {
+    device.disconnect();
+  } catch {
+    /* ignore — may already be half-open after a timeout */
+  }
+  const client = (device as TuyDeviceInternals).client;
+  if (client && !client.destroyed) {
+    try {
+      client.destroy();
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 /** Map 0–100% → device brightness scale (10–1000). */
@@ -143,11 +182,13 @@ function readStateFromDps(dps: Record<string, unknown>): TuyaLightState {
   return { on, brightnessPct };
 }
 
-type TuyDevice = InstanceType<typeof TuyAPI>;
-
 /**
  * Connect, run `fn`, disconnect. One overall timeout for connect+work
  * (avoids stacking 2× timeouts on unreachable devices).
+ *
+ * tuyapi both rejects promises *and* emits EventEmitter `error` (socket
+ * timeout / EHOSTUNREACH). Without a listener, Node turns those into
+ * uncaughtException even when the await path is caught.
  */
 async function withDevice<T>(
   creds: TuyaLightCredentials,
@@ -164,23 +205,29 @@ async function withDevice<T>(
     issueRefreshOnConnect: false,
   });
 
+  // Align tuyapi's socket connect timeout with our overall budget.
+  (device as TuyDeviceInternals)._connectTimeout = Math.max(
+    1,
+    Math.ceil(timeoutMs / 1000),
+  );
+
+  // Sink library `error` events so they cannot become process uncaughtException.
+  // connect()/get()/set() still reject; we map those via toTuyaError below.
+  device.on("error", () => undefined);
+
   try {
-    return await withTimeout(
-      (async () => {
-        await device.connect();
-        return fn(device);
-      })(),
-      creds.ip,
-      timeoutMs,
-    );
+    const work = (async () => {
+      await device.connect();
+      return fn(device);
+    })();
+    // If our timeout wins the race, a late connect/socket failure must not
+    // surface as an unhandled rejection.
+    void work.catch(() => undefined);
+    return await withTimeout(work, creds.ip, timeoutMs);
   } catch (error) {
     throw toTuyaError(creds.ip, error);
   } finally {
-    try {
-      device.disconnect();
-    } catch {
-      /* ignore — may already be half-open after a timeout */
-    }
+    forceCloseDevice(device);
   }
 }
 
