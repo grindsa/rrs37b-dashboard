@@ -29,6 +29,8 @@ export type HeatingThermostatStatus = {
   paired: boolean | null;
   temperatureC: number | null;
   setpointC: number | null;
+  /** From gira-ble-api `heating_active`; null until GATT poll / setpoint write. */
+  heatingActive: boolean | null;
   lastSeenAt: string | null;
   updatedAt: string | null;
   error: string | null;
@@ -61,6 +63,7 @@ function toStatus(
     paired: live.paired,
     temperatureC: live.temperature_c,
     setpointC: live.setpoint_c,
+    heatingActive: live.heating_active,
     lastSeenAt: live.last_seen_at,
     updatedAt: live.updated_at,
     error: live.error,

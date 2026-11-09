@@ -24,6 +24,8 @@ export type GiraThermostat = {
   paired: boolean | null;
   temperature_c: number | null;
   setpoint_c: number | null;
+  /** GATT-only; null until a status poll / setpoint write. */
+  heating_active: boolean | null;
   updated_at: string | null;
   last_seen_at: string | null;
   rssi: number | null;
@@ -141,6 +143,7 @@ function normalizeThermostat(raw: unknown): GiraThermostat | null {
     paired: asNullableBool(o.paired),
     temperature_c: asNullableNumber(o.temperature_c),
     setpoint_c: asNullableNumber(o.setpoint_c),
+    heating_active: asNullableBool(o.heating_active),
     updated_at: asNullableString(o.updated_at),
     last_seen_at: asNullableString(o.last_seen_at),
     rssi: asNullableNumber(o.rssi),

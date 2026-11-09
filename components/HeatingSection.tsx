@@ -72,6 +72,54 @@ function BluetoothIcon({ className }: { className?: string }) {
   );
 }
 
+function FlameIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M12 3c2.5 3.2 4 5.8 4 8.2a4 4 0 1 1-8 0C8 8.8 9.5 6.2 12 3z" />
+      <path d="M12 14.5c.9-1 1.4-1.9 1.4-2.9" />
+    </svg>
+  );
+}
+
+function IstTemperature({
+  temperatureC,
+  heatingActive,
+  className,
+}: {
+  temperatureC: number | null;
+  heatingActive: boolean | null;
+  className?: string;
+}) {
+  return (
+    <div className={["min-w-[3.75rem] text-right", className].filter(Boolean).join(" ")}>
+      <p className="text-[0.65rem] uppercase tracking-wide text-muted">Ist</p>
+      <span className="relative inline-block">
+        <p className="text-lg font-semibold tabular-nums leading-none text-foreground">
+          {formatTemp(temperatureC)}
+        </p>
+        {heatingActive === true ? (
+          <span
+            className="absolute -right-2.5 -top-1.5 text-accent"
+            title="Heizung aktiv"
+            aria-label="Heizung aktiv"
+          >
+            <FlameIcon className="h-2.5 w-2.5" />
+          </span>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
 function SetpointControls({
   name,
   setpointC,
@@ -201,14 +249,10 @@ function ThermostatRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-4">
-          <div className="min-w-[3.5rem] text-right">
-            <p className="text-[0.65rem] uppercase tracking-wide text-muted">
-              Ist
-            </p>
-            <p className="text-lg font-semibold tabular-nums leading-none text-foreground">
-              {formatTemp(thermostat.temperatureC)}
-            </p>
-          </div>
+          <IstTemperature
+            temperatureC={thermostat.temperatureC}
+            heatingActive={thermostat.heatingActive}
+          />
           <SetpointControls
             name={thermostat.name}
             setpointC={shownSetpoint}
@@ -268,14 +312,11 @@ function GroupBlock({
           </span>
         </button>
         {primary ? (
-          <div className="min-w-[3.5rem] shrink-0 text-right">
-            <p className="text-[0.65rem] uppercase tracking-wide text-muted">
-              Ist
-            </p>
-            <p className="text-lg font-semibold tabular-nums leading-none text-foreground">
-              {formatTemp(primary.temperatureC)}
-            </p>
-          </div>
+          <IstTemperature
+            className="shrink-0"
+            temperatureC={primary.temperatureC}
+            heatingActive={primary.heatingActive}
+          />
         ) : null}
       </div>
 

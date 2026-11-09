@@ -270,10 +270,10 @@ thermostats:
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /api/heating` | Floor-grouped snapshot (Ist/Soll/online/paired/`last_seen_at`) |
+| `GET /api/heating` | Floor-grouped snapshot (Ist/Soll/`heatingActive`/online/paired/`last_seen_at`) |
 | `POST /api/heating/setpoint` | `{ id, celsius }` — BLE write (~5–60s); UI shows pending and blocks double-submit |
 
-Empty floors (no live thermostats) and ids not listed in YAML are hidden. Unpaired rooms show a muted Bluetooth icon and disabled ± controls.
+Empty floors (no live thermostats) and ids not listed in YAML are hidden. Unpaired rooms show a muted Bluetooth icon and disabled ± controls. When gira-ble-api reports `heating_active: true`, a small accent flame overlays the Ist temperature (room rows and the collapsed floor-header primary).
 
 ## Smarthome
 
