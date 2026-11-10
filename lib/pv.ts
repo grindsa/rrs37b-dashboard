@@ -1,26 +1,29 @@
 /**
  * Photovoltaik snapshot — Growatt NOAH (SoC via noah-mqtt), APsystems EZ1-M
  * (solar W), Shelly Pro 3EM (house W).
+ *
+ * House (Shelly) and generation/battery (EZ1 + NOAH) are loaded and cached
+ * separately so the UI can show Hausverbrauch before slow/unreachable devices
+ * time out.
  */
 
 import { cacheGetOrSet, CACHE_TTL } from "./cache";
 import { fetchEz1Production } from "./pv-ez1";
 import { fetchNoahReading } from "./pv-noah";
 import { fetchShellyPro3Em, getHouseMeter } from "./pv-shelly-em";
+import {
+  mergePvParts,
+  type PvHouseSnapshot,
+  type PvRestSnapshot,
+  type PvSnapshot,
+} from "./pv-types";
 
-export type PvSnapshot = {
-  socPct: number | null;
-  /** Battery charge power (W) when NOAH reports it. */
-  chargeW: number | null;
-  /** Battery discharge power (W) when NOAH reports it. */
-  dischargeW: number | null;
-  solarW: number | null;
-  houseW: number | null;
-  /** solarW − houseW when both readings exist. */
-  netW: number | null;
-  fetchedAt: string;
-  warnings: string[];
-};
+export type {
+  PvHouseSnapshot,
+  PvRestSnapshot,
+  PvSnapshot,
+} from "./pv-types";
+export { mergePvParts } from "./pv-types";
 
 function warningFrom(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message;
@@ -31,14 +34,38 @@ function envSet(name: string): boolean {
   return Boolean(process.env[name]?.trim());
 }
 
-async function loadPvSnapshot(): Promise<PvSnapshot> {
+async function loadPvHouse(): Promise<PvHouseSnapshot> {
+  const warnings: string[] = [];
+  let houseW: number | null = null;
+
+  const houseMeter = getHouseMeter();
+  if (!houseMeter.ok) {
+    warnings.push(houseMeter.warning);
+  } else {
+    try {
+      const reading = await fetchShellyPro3Em(houseMeter.meter);
+      houseW = reading.totalActPowerW;
+    } catch (error: unknown) {
+      warnings.push(
+        warningFrom(error, "Shelly Pro 3EM Hausverbrauch nicht verfügbar"),
+      );
+    }
+  }
+
+  return {
+    houseW,
+    fetchedAt: new Date().toISOString(),
+    warnings,
+  };
+}
+
+async function loadPvRest(): Promise<PvRestSnapshot> {
   const warnings: string[] = [];
 
   let socPct: number | null = null;
   let chargeW: number | null = null;
   let dischargeW: number | null = null;
   let solarW: number | null = null;
-  let houseW: number | null = null;
 
   const tasks: Promise<void>[] = [];
 
@@ -77,40 +104,30 @@ async function loadPvSnapshot(): Promise<PvSnapshot> {
     );
   }
 
-  const houseMeter = getHouseMeter();
-  if (!houseMeter.ok) {
-    warnings.push(houseMeter.warning);
-  } else {
-    tasks.push(
-      fetchShellyPro3Em(houseMeter.meter)
-        .then((reading) => {
-          houseW = reading.totalActPowerW;
-        })
-        .catch((error: unknown) => {
-          warnings.push(
-            warningFrom(error, "Shelly Pro 3EM Hausverbrauch nicht verfügbar"),
-          );
-        }),
-    );
-  }
-
   await Promise.all(tasks);
-
-  const netW =
-    solarW !== null && houseW !== null ? solarW - houseW : null;
 
   return {
     socPct,
     chargeW,
     dischargeW,
     solarW,
-    houseW,
-    netW,
     fetchedAt: new Date().toISOString(),
     warnings,
   };
 }
 
+export async function getPvHouseSnapshot(): Promise<PvHouseSnapshot> {
+  return cacheGetOrSet("pv:house", CACHE_TTL.pv, loadPvHouse);
+}
+
+export async function getPvRestSnapshot(): Promise<PvRestSnapshot> {
+  return cacheGetOrSet("pv:rest", CACHE_TTL.pv, loadPvRest);
+}
+
 export async function getPvSnapshot(): Promise<PvSnapshot> {
-  return cacheGetOrSet("pv:snapshot", CACHE_TTL.pv, loadPvSnapshot);
+  const [house, rest] = await Promise.all([
+    getPvHouseSnapshot(),
+    getPvRestSnapshot(),
+  ]);
+  return mergePvParts(house, rest);
 }

@@ -1,7 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { PvSnapshot } from "@/lib/pv";
+import { useEffect, useRef, useState } from "react";
+import {
+  mergePvParts,
+  type PvHouseSnapshot,
+  type PvRestSnapshot,
+  type PvSnapshot,
+} from "@/lib/pv-types";
 import { formatRelativeAge } from "@/lib/format";
 import { isPageHidden, onForeground } from "@/lib/foreground-refresh";
 import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
@@ -12,6 +17,15 @@ type LoadState =
   | { status: "loading"; data?: PvSnapshot }
   | { status: "live"; data: PvSnapshot }
   | { status: "error"; message: string; data?: PvSnapshot };
+
+async function fetchPvPart<T>(part: "house" | "rest"): Promise<T> {
+  const res = await fetch(`/api/pv?part=${part}`, { cache: "no-store" });
+  if (res.status === 401) {
+    throw new Error("Nicht angemeldet");
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return (await res.json()) as T;
+}
 
 function formatWatts(w: number | null, signed = false): string {
   if (w === null || !Number.isFinite(w)) return "—";
@@ -41,11 +55,11 @@ export function PvPlaceholder() {
     <section aria-hidden className="opacity-40">
       <p className="section-label">Photovoltaik</p>
       <div className="mt-5">
-        <p className="text-sm font-medium text-muted">Batterie</p>
+        <p className="text-sm font-medium text-muted">Hausverbrauch</p>
         <p className="mt-0.5 text-[2.75rem] font-semibold leading-none">—</p>
       </div>
       <ul className="mt-6 flex flex-col gap-5">
-        {["Erzeugung", "Hausverbrauch"].map((label) => (
+        {["Erzeugung", "Batterie"].map((label) => (
           <li key={label}>
             <p className="text-sm font-medium text-muted">{label}</p>
             <p className="mt-0.5 text-[2.1rem] font-semibold leading-none">—</p>
@@ -75,33 +89,113 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
     };
   }, []);
 
+  const houseRef = useRef<PvHouseSnapshot | null>(
+    initialData
+      ? {
+          houseW: initialData.houseW,
+          fetchedAt: initialData.fetchedAt,
+          warnings: [],
+        }
+      : null,
+  );
+  const restRef = useRef<PvRestSnapshot | null>(
+    initialData
+      ? {
+          socPct: initialData.socPct,
+          chargeW: initialData.chargeW,
+          dischargeW: initialData.dischargeW,
+          solarW: initialData.solarW,
+          fetchedAt: initialData.fetchedAt,
+          warnings: initialData.warnings,
+        }
+      : null,
+  );
+
   useEffect(() => {
     let cancelled = false;
 
+    function publish() {
+      if (cancelled) return;
+      const data = mergePvParts(houseRef.current, restRef.current);
+      const hasAny =
+        data.houseW !== null ||
+        data.solarW !== null ||
+        data.socPct !== null ||
+        data.warnings.length > 0;
+      if (!hasAny && !houseRef.current && !restRef.current) return;
+      setState({ status: "live", data });
+    }
+
     async function load() {
-      try {
-        const res = await fetch("/api/pv", { cache: "no-store" });
-        if (res.status === 401) {
-          if (!cancelled) {
+      // Start both immediately; apply Shelly as soon as it returns so the
+      // tab is usable while EZ1-M / NOAH may still be timing out.
+      const housePromise = fetchPvPart<PvHouseSnapshot>("house")
+        .then((house) => {
+          houseRef.current = house;
+          publish();
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          const message = err instanceof Error ? err.message : "Fehler";
+          if (message === "Nicht angemeldet") {
             setState((prev) => ({
               status: "error",
-              message: "Nicht angemeldet",
+              message,
               data: prev.data,
             }));
+            return;
           }
-          return;
-        }
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as PvSnapshot;
-        if (!cancelled) setState({ status: "live", data });
-      } catch (err) {
-        if (!cancelled) {
-          setState((prev) => ({
-            status: "error",
-            message: err instanceof Error ? err.message : "Fehler",
-            data: prev.data,
-          }));
-        }
+          if (!houseRef.current) {
+            houseRef.current = {
+              houseW: null,
+              fetchedAt: new Date().toISOString(),
+              warnings: [message],
+            };
+            publish();
+          }
+        });
+
+      const restPromise = fetchPvPart<PvRestSnapshot>("rest")
+        .then((rest) => {
+          restRef.current = rest;
+          publish();
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          const message = err instanceof Error ? err.message : "Fehler";
+          if (message === "Nicht angemeldet") {
+            setState((prev) => ({
+              status: "error",
+              message,
+              data: prev.data,
+            }));
+            return;
+          }
+          if (!restRef.current) {
+            restRef.current = {
+              socPct: null,
+              chargeW: null,
+              dischargeW: null,
+              solarW: null,
+              fetchedAt: new Date().toISOString(),
+              warnings: [message],
+            };
+            publish();
+          }
+        });
+
+      await Promise.allSettled([housePromise, restPromise]);
+
+      if (
+        !cancelled &&
+        !houseRef.current &&
+        !restRef.current
+      ) {
+        setState((prev) => ({
+          status: "error",
+          message: "PV-Daten nicht verfügbar",
+          data: prev.data,
+        }));
       }
     }
 
@@ -142,14 +236,11 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
       </div>
 
       <div className="mt-5">
-        <p className="text-sm font-medium text-muted">Batterie</p>
+        <p className="text-sm font-medium text-muted">Hausverbrauch</p>
         <p className="mt-0.5 text-[2.75rem] font-semibold leading-none tracking-tight tabular-nums">
-          {formatSoc(data?.socPct ?? null)}
+          {formatWatts(data?.houseW ?? null)}
         </p>
-        <p className="mt-1 text-[0.7rem] text-muted">
-          Growatt NOAH 2000
-          {flow ? ` · ${flow}` : ""}
-        </p>
+        <p className="mt-1 text-[0.7rem] text-muted">Shelly Pro 3EM</p>
       </div>
 
       <ul className="mt-6 flex flex-col gap-5">
@@ -161,11 +252,14 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
           <p className="mt-1 text-[0.7rem] text-muted">APsystems EZ1-M</p>
         </li>
         <li>
-          <p className="text-sm font-medium text-muted">Hausverbrauch</p>
+          <p className="text-sm font-medium text-muted">Batterie</p>
           <p className="mt-0.5 text-[2.1rem] font-semibold leading-none tracking-tight tabular-nums">
-            {formatWatts(data?.houseW ?? null)}
+            {formatSoc(data?.socPct ?? null)}
           </p>
-          <p className="mt-1 text-[0.7rem] text-muted">Shelly Pro 3EM</p>
+          <p className="mt-1 text-[0.7rem] text-muted">
+            Growatt NOAH 2000
+            {flow ? ` · ${flow}` : ""}
+          </p>
         </li>
         {data?.netW !== null && data?.netW !== undefined ? (
           <li>
