@@ -775,14 +775,21 @@ function PlugRow({
   busy,
   error,
   onToggle,
+  onVolumeNudge,
 }: {
   plug: PlugDeviceStatus;
   busy: boolean;
   error?: string;
   onToggle: (next: boolean) => void;
+  onVolumeNudge?: (delta: 1 | -1) => void;
 }) {
   const checked = plug.on === true;
   const unknown = plug.on === null;
+  const isFsapi = plug.vendor === "fsapi";
+  const volumeKnown =
+    typeof plug.volume === "number" && typeof plug.volumeMax === "number";
+  const volumeLabel =
+    isFsapi && volumeKnown ? ` · Lautstärke ${plug.volume}` : "";
 
   return (
     <li className="flex items-center justify-between gap-4">
@@ -799,30 +806,68 @@ function PlugRow({
               ? `offline · ${plug.error}`
               : "offline"
             : unknown
-              ? "Status unbekannt"
+              ? `Status unbekannt${volumeLabel}`
               : checked
-                ? "ein"
-                : "aus"}
+                ? `ein${volumeLabel}`
+                : `aus${volumeLabel}`}
         </p>
         {error ? <p className="mt-1 text-xs text-warning">{error}</p> : null}
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-pressed={checked}
-        aria-label={`${plug.name} ${checked ? "ausschalten" : "einschalten"}`}
-        disabled={busy || !plug.online || unknown}
-        onClick={() => onToggle(!checked)}
-        className={[
-          "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-accent transition-[box-shadow,opacity,background-color] duration-200 disabled:opacity-45",
-          checked
-            ? "bg-accent text-background ring-2 ring-accent ring-offset-2 ring-offset-background"
-            : "bg-surface",
-        ].join(" ")}
-      >
-        <IconPower className="h-5 w-5" />
-      </button>
+      <div className="flex shrink-0 items-center gap-2">
+        {isFsapi && onVolumeNudge ? (
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label={`${plug.name} leiser`}
+              disabled={
+                busy ||
+                !plug.online ||
+                !volumeKnown ||
+                (plug.volume ?? 0) <= 0
+              }
+              onClick={() => onVolumeNudge(-1)}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-surface text-accent transition-opacity disabled:opacity-45"
+            >
+              <span className="text-base leading-none" aria-hidden>
+                −
+              </span>
+            </button>
+            <button
+              type="button"
+              aria-label={`${plug.name} lauter`}
+              disabled={
+                busy ||
+                !plug.online ||
+                !volumeKnown ||
+                (plug.volume ?? 0) >= (plug.volumeMax ?? 0)
+              }
+              onClick={() => onVolumeNudge(1)}
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-surface text-accent transition-opacity disabled:opacity-45"
+            >
+              <span className="text-base leading-none" aria-hidden>
+                +
+              </span>
+            </button>
+          </div>
+        ) : null}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          aria-pressed={checked}
+          aria-label={`${plug.name} ${checked ? "ausschalten" : "einschalten"}`}
+          disabled={busy || !plug.online || unknown}
+          onClick={() => onToggle(!checked)}
+          className={[
+            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-accent transition-[box-shadow,opacity,background-color] duration-200 disabled:opacity-45",
+            checked
+              ? "bg-accent text-background ring-2 ring-accent ring-offset-2 ring-offset-background"
+              : "bg-surface",
+          ].join(" ")}
+        >
+          <IconPower className="h-5 w-5" />
+        </button>
+      </div>
     </li>
   );
 }
@@ -1244,6 +1289,92 @@ export function SmarthomeSection({
     }
   }
 
+  async function postPlugVolume(plugId: string, delta: 1 | -1) {
+    setPlugBusyId(plugId);
+    setActionErrors((prev) => {
+      const next = { ...prev };
+      delete next[`plug:${plugId}`];
+      return next;
+    });
+
+    setState((prev) => {
+      if (!prev.data) return prev;
+      return {
+        ...prev,
+        status: "live",
+        data: {
+          ...prev.data,
+          plugs: prev.data.plugs.map((plug) => {
+            if (plug.id !== plugId || typeof plug.volume !== "number") {
+              return plug;
+            }
+            const max = plug.volumeMax ?? plug.volume;
+            const volume = Math.min(max, Math.max(0, plug.volume + delta));
+            return { ...plug, volume };
+          }),
+        },
+      };
+    });
+
+    try {
+      const res = await fetch("/api/smarthome/plug/volume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plugId, delta }),
+      });
+      const payload = (await res.json()) as {
+        error?: string;
+        volume?: number;
+        volumeMax?: number;
+        on?: boolean | null;
+        result?: { ok: boolean; error?: string };
+      };
+      if (!res.ok || payload.result?.ok === false) {
+        setActionErrors((prev) => ({
+          ...prev,
+          [`plug:${plugId}`]:
+            payload.result?.error ?? payload.error ?? `HTTP ${res.status}`,
+        }));
+      } else if (
+        typeof payload.volume === "number" &&
+        typeof payload.volumeMax === "number"
+      ) {
+        setState((prev) => {
+          if (!prev.data) return prev;
+          return {
+            ...prev,
+            status: "live",
+            data: {
+              ...prev.data,
+              plugs: prev.data.plugs.map((plug) =>
+                plug.id === plugId
+                  ? {
+                      ...plug,
+                      volume: payload.volume,
+                      volumeMax: payload.volumeMax,
+                      on:
+                        payload.on === undefined ? plug.on : payload.on,
+                    }
+                  : plug,
+              ),
+            },
+          };
+        });
+      }
+      await refreshSoon();
+    } catch (err) {
+      setActionErrors((prev) => ({
+        ...prev,
+        [`plug:${plugId}`]:
+          err instanceof Error
+            ? err.message
+            : "Lautstärke-Befehl fehlgeschlagen",
+      }));
+    } finally {
+      setPlugBusyId(null);
+    }
+  }
+
   async function postLampCycle(lampId: string) {
     const lamp = state.data?.lightGroups
       .flatMap((g) => g.lamps)
@@ -1454,6 +1585,11 @@ export function SmarthomeSection({
                 busy={plugBusyId === plug.id}
                 error={actionErrors[`plug:${plug.id}`]}
                 onToggle={(on) => void postPlug(plug.id, on)}
+                onVolumeNudge={
+                  plug.vendor === "fsapi"
+                    ? (delta) => void postPlugVolume(plug.id, delta)
+                    : undefined
+                }
               />
             ))}
           </ul>

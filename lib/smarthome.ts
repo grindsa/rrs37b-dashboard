@@ -9,9 +9,12 @@ import { shellyRpc, ShellyRpcError } from "./shelly-rpc";
 import { takeControlSlot } from "./control-throttle";
 import {
   getFsapiPowerOn,
+  getFsapiVolume,
+  getFsapiVolumeMax,
+  nudgeFsapiVolume,
   setFsapiPowerOn,
-  FsapiPowerError,
-} from "./fsapi-power";
+  FsapiError,
+} from "./fsapi";
 import { getTapoPlugOn, setTapoPlugOn, TapoPlugError } from "./tapo-plug";
 import {
   classifyLightMode,
@@ -38,6 +41,7 @@ import {
   isGiraCover,
   lightGroups,
   visiblePlugs,
+  type PlugVendor,
   type SmarthomeConfig,
   type SmarthomeCoverConfig,
   type SmarthomeGiraCoverConfig,
@@ -97,9 +101,14 @@ export type CoverDeviceStatus = {
 export type PlugDeviceStatus = {
   id: string;
   name: string;
+  vendor: PlugVendor;
   online: boolean;
   on: boolean | null;
   error?: string;
+  /** FSAPI radios — absolute volume when known. */
+  volume?: number | null;
+  /** FSAPI radios — max volume index (volumeSteps − 1). */
+  volumeMax?: number | null;
 };
 
 export type LampDeviceStatus = {
@@ -167,6 +176,14 @@ export type CoverActionResult = {
 export type PlugActionResult = {
   plugId: string;
   on: boolean;
+  result: DeviceActionResult;
+};
+
+export type PlugVolumeActionResult = {
+  plugId: string;
+  volume: number;
+  volumeMax: number;
+  on: boolean | null;
   result: DeviceActionResult;
 };
 
@@ -391,12 +408,30 @@ function plugErrorMessage(error: unknown): string {
   if (
     error instanceof ShellyRpcError ||
     error instanceof TapoPlugError ||
-    error instanceof FsapiPowerError
+    error instanceof FsapiError
   ) {
     return error.message;
   }
   if (error instanceof Error) return error.message;
   return "Plug nicht erreichbar";
+}
+
+function fsapiTarget(plug: SmarthomePlugConfig) {
+  return { ip: plug.ip, pin: plug.pin, port: plug.port };
+}
+
+async function readFsapiVolumeFields(
+  plug: SmarthomePlugConfig,
+): Promise<{ volume: number | null; volumeMax: number | null }> {
+  try {
+    const [volume, volumeMax] = await Promise.all([
+      getFsapiVolume(fsapiTarget(plug)),
+      getFsapiVolumeMax(fsapiTarget(plug)),
+    ]);
+    return { volume, volumeMax };
+  } catch {
+    return { volume: null, volumeMax: null };
+  }
 }
 
 function lampErrorMessage(error: unknown): string {
@@ -411,16 +446,27 @@ async function readPlugStatus(
   try {
     if (plug.vendor === "tapo") {
       const on = await getTapoPlugOn(plug.ip);
-      return { id: plug.id, name: plug.name, online: true, on };
+      return {
+        id: plug.id,
+        name: plug.name,
+        vendor: plug.vendor,
+        online: true,
+        on,
+      };
     }
 
     if (plug.vendor === "fsapi") {
-      const on = await getFsapiPowerOn({
-        ip: plug.ip,
-        pin: plug.pin,
-        port: plug.port,
-      });
-      return { id: plug.id, name: plug.name, online: true, on };
+      const on = await getFsapiPowerOn(fsapiTarget(plug));
+      const { volume, volumeMax } = await readFsapiVolumeFields(plug);
+      return {
+        id: plug.id,
+        name: plug.name,
+        vendor: "fsapi",
+        online: true,
+        on,
+        volume,
+        volumeMax,
+      };
     }
 
     const status = await shellyRpc<ShellySwitchStatus>(
@@ -431,6 +477,7 @@ async function readPlugStatus(
     return {
       id: plug.id,
       name: plug.name,
+      vendor: plug.vendor,
       online: true,
       on: typeof status.output === "boolean" ? status.output : null,
     };
@@ -438,9 +485,13 @@ async function readPlugStatus(
     return {
       id: plug.id,
       name: plug.name,
+      vendor: plug.vendor,
       online: false,
       on: null,
       error: plugErrorMessage(error),
+      ...(plug.vendor === "fsapi"
+        ? { volume: null, volumeMax: null }
+        : {}),
     };
   }
 }
@@ -654,9 +705,13 @@ export async function getSmarthomeSnapshot(
       plugs: visiblePlugs(loaded.config).map((plug) => ({
         id: plug.id,
         name: plug.name,
+        vendor: plug.vendor,
         online: false,
         on: null,
         error: "Platzhalter — config/smarthome.yml anlegen",
+        ...(plug.vendor === "fsapi"
+          ? { volume: null, volumeMax: null }
+          : {}),
       })),
       fetchedAt: new Date().toISOString(),
       anyMoving: false,
@@ -799,10 +854,7 @@ export async function runPlugSet(
     if (plug.vendor === "tapo") {
       await setTapoPlugOn(plug.ip, on);
     } else if (plug.vendor === "fsapi") {
-      await setFsapiPowerOn(
-        { ip: plug.ip, pin: plug.pin, port: plug.port },
-        on,
-      );
+      await setFsapiPowerOn(fsapiTarget(plug), on);
     } else {
       await shellyRpc(plug.ip, "Switch.Set", { id: plug.switchId, on });
     }
@@ -813,6 +865,55 @@ export async function runPlugSet(
     return {
       plugId,
       on,
+      result: {
+        id: plug.id,
+        ok: false,
+        error: plugErrorMessage(error),
+      },
+    };
+  }
+}
+
+export async function runPlugVolumeNudge(
+  plugId: string,
+  delta: 1 | -1,
+): Promise<PlugVolumeActionResult> {
+  const config = requireLiveConfig();
+  const plug = findPlug(config, plugId);
+  if (!plug) {
+    throw new Error(`Unbekannter Plug: ${plugId}`);
+  }
+  if (plug.vendor !== "fsapi") {
+    throw new Error(`Lautstärke nur für FSAPI-Radios (got ${plug.vendor})`);
+  }
+  takeControlSlot([`plug:${plug.id}:volume`]);
+
+  try {
+    const { volume, volumeMax } = await nudgeFsapiVolume(
+      fsapiTarget(plug),
+      delta,
+    );
+    let on: boolean | null = null;
+    try {
+      on = await getFsapiPowerOn(fsapiTarget(plug));
+    } catch {
+      on = null;
+    }
+    invalidateSmarthomeStatusCache();
+    return {
+      plugId,
+      volume,
+      volumeMax,
+      on,
+      result: { id: plug.id, ok: true },
+    };
+  } catch (error) {
+    invalidateSmarthomeStatusCache();
+    return {
+      plugId,
+      volume: 0,
+      volumeMax: 0,
+      on: null,
       result: {
         id: plug.id,
         ok: false,

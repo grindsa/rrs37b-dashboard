@@ -119,7 +119,7 @@ lib/
   light-mode.ts      # Lamp cycle helpers (shared with UI)
   tuya-light.ts      # LEDVANCE / Tuya local (tuyapi)
   tapo-plug.ts       # Tapo P100 local KLAP (vendor: tapo)
-  fsapi-power.ts     # Frontier Silicon FSAPI power (vendor: fsapi)
+  fsapi.ts           # Frontier Silicon FSAPI power + volume (vendor: fsapi)
   pv.ts              # Photovoltaik orchestrator
   pv-shelly-em.ts    # Pro 3EM house W
   pv-ez1.ts          # EZ1-M solar W
@@ -281,7 +281,7 @@ Tab **Smarthome** (session required, same unlock as the rest of the dashboard):
 
 - Roller shutters (Shelly 2PM Cover and Gira System 3000 covers via gira-ble-api) — ↑ / ↓ controls (active direction becomes pause/stop while moving); groups with no covers are hidden
 - LEDVANCE Smart+ WiFi lamps (Tuya local) — one cycle button per lamp/group: **off → on → dim → off** (mixed → on); groups with no lamps are hidden
-- Power toggles under **Smarthomegeräte** (Shelly Plug S, Tapo P100, FSAPI radios such as Hama IR110)
+- Power toggles under **Smarthomegeräte** (Shelly Plug S, Tapo P100, FSAPI radios such as Hama IR100/IR110 with volume ±1)
 
 Device traffic is server-side (`lib/smarthome.ts` → Shelly RPC, gira-ble-api, Tapo KLAP, FSAPI HTTP, or Tuya/`tuyapi`). The browser never sees device IPs or `local_key` — only config ids (`groupId` / `coverId` / `lampId` / `plugId`).
 
@@ -293,6 +293,7 @@ Device traffic is server-side (`lib/smarthome.ts` → Shelly RPC, gira-ble-api, 
 | `POST /api/smarthome/light` | `{ lampId }` — cycle one lamp |
 | `POST /api/smarthome/light-group` | `{ groupId }` — cycle all lamps in a light group to the same next mode |
 | `POST /api/smarthome/plug` | `{ plugId, on: boolean }` |
+| `POST /api/smarthome/plug/volume` | `{ plugId, delta: 1\|-1 }` — FSAPI radios only |
 
 Control commands always hit devices live and invalidate the status cache. Without a valid session, `proxy.ts` returns 401 on these routes (same as sensors/PV).
 
@@ -373,21 +374,27 @@ meters:
 - Lamp cycle maps modes to Tuya DPs `20` (on/off) and `22` (brightness 10–1000). On uses `on_percent` (default 100). Dim uses each lamp’s `dim_percent`; if omitted, that lamp turns **off** on dim (useful in mixed groups). A single lamp without `dim_percent` cycles off → on → off.
 - Plug `vendor` is `shelly` (default), `tapo`, or `fsapi`. Sensor `gateway` plugs must be Shelly (Tapo/FSAPI as gateway is a config error).
 - `password` is optional on Shelly covers, plugs and meters. Without it, `SHELLY_RPC_PASSWORD` is used; the server log lists which devices still fall back. Entries sharing an IP must not have different passwords. Do not set `password` on Tapo or FSAPI plugs.
-- FSAPI entries (`vendor: fsapi`) are power on/off only (same UI toggle as plugs). Optional `pin` (default `1234`) and `port` (default `80`).
+- FSAPI entries (`vendor: fsapi`) support power on/off plus volume ±1 (lauter/leiser). Optional `pin` (default `1234`) and `port` (default `80`).
 - Empty groups are hidden per tab (no covers → no Rollo section; no lamps → no Lampen section; no live thermostats → no Heizung floor). Unknown `group` or `gateway` references are config errors.
 - Optional path override: `SMARTHOME_CONFIG_FILE` (Compose sets `/app/config/smarthome.yml`).
 - If the live file is missing, the tab shows `config/smarthome.example.yml` (no LAN probes; control, sensors and Hausverbrauch disabled).
 
-#### Hama IR110 / FSAPI radio
+#### Hama IR100 / IR110 / FSAPI radio
 
-Hama IR110 (and other Frontier Silicon / UNDOK radios) are controlled over **local LAN HTTP (FSAPI)**, not cloud. Add them under `plugs` with `vendor: fsapi`. v1 supports power on/off only (`netRemote.sys.power`).
+Hama IR100/IR110 (and other Frontier Silicon / UNDOK radios) are controlled over **local LAN HTTP (FSAPI)**, not cloud. Add them under `plugs` with `vendor: fsapi`. Supported: power on/off (`netRemote.sys.power`) and volume ±1 (`netRemote.sys.audio.volume`, max from `netRemote.sys.caps.volumeSteps`).
 
 On the radio, enable:
 
 - **MENU → System settings → Network → Keep network connected → Yes** — otherwise Wi‑Fi drops in standby and remote power-on fails.
 - Note the **NetRemote PIN** under **MENU → System settings → Network → NetRemote PIN Setup** (often default `1234`; set `pin` in YAML if changed).
 
-Sanity-check from a host on the same LAN: `http://<IP>/fsapi/GET/netRemote.sys.power?pin=1234` (or `http://<IP>:2244/...` if the device uses port 2244 — then set `port: 2244`).
+Sanity-check from a host on the same LAN:
+
+- Power: `http://<IP>/fsapi/GET/netRemote.sys.power?pin=1234`
+- Volume: `http://<IP>/fsapi/GET/netRemote.sys.audio.volume?pin=1234`
+- Volume steps: `http://<IP>/fsapi/GET/netRemote.sys.caps.volumeSteps?pin=1234`
+
+(Use `http://<IP>:2244/...` if the device uses port 2244 — then set `port: 2244`.)
 
 #### LEDVANCE / Tuya keys
 

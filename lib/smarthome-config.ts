@@ -8,7 +8,7 @@
  * (covers / lamps / thermostats). Empty groups are hidden in that tab.
  * Shelly devices without `password` use SHELLY_RPC_PASSWORD from env.
  * Tapo plugs use TAPO_EMAIL / TAPO_PASSWORD from env (local KLAP).
- * FSAPI devices (e.g. Hama IR110) use optional YAML `pin` / `port` (LAN HTTP).
+ * FSAPI devices (e.g. Hama IR100/IR110) use optional YAML `pin` / `port` (LAN HTTP).
  * Lamp `local_key` values are server secrets — never expose to the client.
  */
 

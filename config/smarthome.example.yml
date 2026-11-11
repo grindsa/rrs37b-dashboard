@@ -108,10 +108,10 @@ lamps:
 # Shelly uses `switchId` + optional `password` (else SHELLY_RPC_PASSWORD).
 # Tapo uses TAPO_EMAIL / TAPO_PASSWORD from .env (local KLAP to `ip`); do not
 # set `password` on Tapo entries.
-# FSAPI (Frontier Silicon / UNDOK, e.g. Hama IR110): power on/off only via LAN
-# HTTP. Optional `pin` (default "1234") and `port` (default 80). On the radio
-# enable Keep network connected, or standby drops Wi‑Fi and remote power-on
-# fails. Do not set Shelly `password` on FSAPI entries.
+# FSAPI (Frontier Silicon / UNDOK, e.g. Hama IR100/IR110): power on/off and
+# volume ±1 via LAN HTTP. Optional `pin` (default "1234") and `port`
+# (default 80). On the radio enable Keep network connected, or standby drops
+# Wi‑Fi and remote power-on fails. Do not set Shelly `password` on FSAPI entries.
 # `hidden: true` keeps a device out of the Smarthome tab — use it for Shelly
 # BLE gateways only (Tapo/FSAPI cannot be a sensor gateway).
 plugs:
