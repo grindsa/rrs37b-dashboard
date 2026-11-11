@@ -122,6 +122,11 @@ export type SmarthomePlugConfig = {
   pin?: string;
   /** FSAPI HTTP port (default 80). Ignored for other vendors. */
   port?: number;
+  /**
+   * FSAPI only — show volume ±1 in the UI (YAML `volume_control`).
+   * Default false so power-only FSAPI devices stay clean.
+   */
+  volumeControl: boolean;
 };
 
 export type SmarthomeSensorConfig = {
@@ -520,6 +525,11 @@ function parsePlug(raw: unknown, pathLabel: string): SmarthomePlugConfig {
   const password = asOptionalPassword(obj.password, `${pathLabel}.password`);
   const pin = asOptionalFsapiPin(obj.pin, `${pathLabel}.pin`);
   const port = asOptionalFsapiPort(obj.port, `${pathLabel}.port`);
+  const volumeControlRaw = obj.volume_control ?? obj.volumeControl;
+  const volumeControl = asOptionalBoolean(
+    volumeControlRaw,
+    `${pathLabel}.volume_control`,
+  );
 
   if (vendor === "tapo" && password) {
     throw new Error(
@@ -541,6 +551,11 @@ function parsePlug(raw: unknown, pathLabel: string): SmarthomePlugConfig {
       `${ERR_PREFIX}: ${pathLabel}.port is FSAPI-only (vendor: fsapi)`,
     );
   }
+  if (vendor !== "fsapi" && volumeControlRaw !== undefined) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.volume_control is FSAPI-only (vendor: fsapi)`,
+    );
+  }
 
   return {
     id: asString(obj.id, `${pathLabel}.id`),
@@ -550,6 +565,7 @@ function parsePlug(raw: unknown, pathLabel: string): SmarthomePlugConfig {
     switchId: asComponentId(obj.switchId, `${pathLabel}.switchId`),
     hidden: asOptionalBoolean(obj.hidden, `${pathLabel}.hidden`),
     password,
+    volumeControl: vendor === "fsapi" ? volumeControl : false,
     ...(vendor === "fsapi"
       ? {
           pin: pin ?? FSAPI_DEFAULT_PIN,

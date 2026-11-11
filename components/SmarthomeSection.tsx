@@ -785,11 +785,11 @@ function PlugRow({
 }) {
   const checked = plug.on === true;
   const unknown = plug.on === null;
-  const isFsapi = plug.vendor === "fsapi";
+  const showVolume = plug.vendor === "fsapi" && plug.volumeControl === true;
   const volumeKnown =
     typeof plug.volume === "number" && typeof plug.volumeMax === "number";
   const volumeLabel =
-    isFsapi && volumeKnown ? ` · Lautstärke ${plug.volume}` : "";
+    showVolume && volumeKnown ? ` · Lautstärke ${plug.volume}` : "";
 
   return (
     <li className="flex items-center justify-between gap-4">
@@ -814,7 +814,7 @@ function PlugRow({
         {error ? <p className="mt-1 text-xs text-warning">{error}</p> : null}
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {isFsapi && onVolumeNudge ? (
+        {showVolume && onVolumeNudge ? (
           <div className="flex items-center gap-1">
             <button
               type="button"
@@ -1586,7 +1586,7 @@ export function SmarthomeSection({
                 error={actionErrors[`plug:${plug.id}`]}
                 onToggle={(on) => void postPlug(plug.id, on)}
                 onVolumeNudge={
-                  plug.vendor === "fsapi"
+                  plug.vendor === "fsapi" && plug.volumeControl
                     ? (delta) => void postPlugVolume(plug.id, delta)
                     : undefined
                 }

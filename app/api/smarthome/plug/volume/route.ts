@@ -45,12 +45,7 @@ export const POST = withAuth(async function POST(request: Request) {
       error instanceof Error
         ? error.message
         : "Lautstärke-Befehl fehlgeschlagen";
-    const status =
-      message.startsWith("Unbekannter") || message.startsWith("Lautstärke nur")
-        ? message.startsWith("Unbekannter")
-          ? 404
-          : 400
-        : 400;
+    const status = message.startsWith("Unbekannter") ? 404 : 400;
     return NextResponse.json({ error: message }, { status });
   }
 });

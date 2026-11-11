@@ -105,7 +105,9 @@ export type PlugDeviceStatus = {
   online: boolean;
   on: boolean | null;
   error?: string;
-  /** FSAPI radios — absolute volume when known. */
+  /** FSAPI — UI volume ±1 enabled via YAML `volume_control`. */
+  volumeControl?: boolean;
+  /** FSAPI radios — absolute volume when known (only if volumeControl). */
   volume?: number | null;
   /** FSAPI radios — max volume index (volumeSteps − 1). */
   volumeMax?: number | null;
@@ -457,6 +459,16 @@ async function readPlugStatus(
 
     if (plug.vendor === "fsapi") {
       const on = await getFsapiPowerOn(fsapiTarget(plug));
+      if (!plug.volumeControl) {
+        return {
+          id: plug.id,
+          name: plug.name,
+          vendor: "fsapi",
+          online: true,
+          on,
+          volumeControl: false,
+        };
+      }
       const { volume, volumeMax } = await readFsapiVolumeFields(plug);
       return {
         id: plug.id,
@@ -464,6 +476,7 @@ async function readPlugStatus(
         vendor: "fsapi",
         online: true,
         on,
+        volumeControl: true,
         volume,
         volumeMax,
       };
@@ -490,7 +503,12 @@ async function readPlugStatus(
       on: null,
       error: plugErrorMessage(error),
       ...(plug.vendor === "fsapi"
-        ? { volume: null, volumeMax: null }
+        ? {
+            volumeControl: plug.volumeControl,
+            ...(plug.volumeControl
+              ? { volume: null, volumeMax: null }
+              : {}),
+          }
         : {}),
     };
   }
@@ -710,7 +728,12 @@ export async function getSmarthomeSnapshot(
         on: null,
         error: "Platzhalter — config/smarthome.yml anlegen",
         ...(plug.vendor === "fsapi"
-          ? { volume: null, volumeMax: null }
+          ? {
+              volumeControl: plug.volumeControl,
+              ...(plug.volumeControl
+                ? { volume: null, volumeMax: null }
+                : {}),
+            }
           : {}),
       })),
       fetchedAt: new Date().toISOString(),
@@ -885,6 +908,11 @@ export async function runPlugVolumeNudge(
   }
   if (plug.vendor !== "fsapi") {
     throw new Error(`Lautstärke nur für FSAPI-Radios (got ${plug.vendor})`);
+  }
+  if (!plug.volumeControl) {
+    throw new Error(
+      `Lautstärke deaktiviert — volume_control: true in smarthome.yml setzen`,
+    );
   }
   takeControlSlot([`plug:${plug.id}:volume`]);
 

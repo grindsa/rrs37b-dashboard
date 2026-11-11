@@ -350,6 +350,7 @@ plugs:
     name: Küchenradio
     vendor: fsapi        # Frontier Silicon / UNDOK (e.g. Hama IR110)
     ip: 192.168.x.x
+    volume_control: true # optional; default false (lauter/leiser UI)
     # pin: "1234"        # optional NetRemote PIN (default 1234)
     # port: 80           # optional HTTP port (default 80; some use 2244)
   - id: gw-wohnzimmer
@@ -374,14 +375,14 @@ meters:
 - Lamp cycle maps modes to Tuya DPs `20` (on/off) and `22` (brightness 10–1000). On uses `on_percent` (default 100). Dim uses each lamp’s `dim_percent`; if omitted, that lamp turns **off** on dim (useful in mixed groups). A single lamp without `dim_percent` cycles off → on → off.
 - Plug `vendor` is `shelly` (default), `tapo`, or `fsapi`. Sensor `gateway` plugs must be Shelly (Tapo/FSAPI as gateway is a config error).
 - `password` is optional on Shelly covers, plugs and meters. Without it, `SHELLY_RPC_PASSWORD` is used; the server log lists which devices still fall back. Entries sharing an IP must not have different passwords. Do not set `password` on Tapo or FSAPI plugs.
-- FSAPI entries (`vendor: fsapi`) support power on/off plus volume ±1 (lauter/leiser). Optional `pin` (default `1234`) and `port` (default `80`).
+- FSAPI entries (`vendor: fsapi`) support power on/off. Set `volume_control: true` for volume ±1 (lauter/leiser); default `false`. Optional `pin` (default `1234`) and `port` (default `80`).
 - Empty groups are hidden per tab (no covers → no Rollo section; no lamps → no Lampen section; no live thermostats → no Heizung floor). Unknown `group` or `gateway` references are config errors.
 - Optional path override: `SMARTHOME_CONFIG_FILE` (Compose sets `/app/config/smarthome.yml`).
 - If the live file is missing, the tab shows `config/smarthome.example.yml` (no LAN probes; control, sensors and Hausverbrauch disabled).
 
 #### Hama IR100 / IR110 / FSAPI radio
 
-Hama IR100/IR110 (and other Frontier Silicon / UNDOK radios) are controlled over **local LAN HTTP (FSAPI)**, not cloud. Add them under `plugs` with `vendor: fsapi`. Supported: power on/off (`netRemote.sys.power`) and volume ±1 (`netRemote.sys.audio.volume`, max from `netRemote.sys.caps.volumeSteps`).
+Hama IR100/IR110 (and other Frontier Silicon / UNDOK radios) are controlled over **local LAN HTTP (FSAPI)**, not cloud. Add them under `plugs` with `vendor: fsapi`. Power on/off (`netRemote.sys.power`) is always available. Volume ±1 (`netRemote.sys.audio.volume`, max from `netRemote.sys.caps.volumeSteps`) requires `volume_control: true` in YAML (default off).
 
 On the radio, enable:
 
