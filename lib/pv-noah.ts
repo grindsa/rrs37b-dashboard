@@ -15,6 +15,8 @@ export type NoahReading = {
   dischargeW: number | null;
   outputW: number | null;
   solarW: number | null;
+  /** Growatt work mode, e.g. load_first / battery_first. */
+  workMode: string | null;
   status: string | null;
   topic: string;
   updatedAt: string;
@@ -26,6 +28,7 @@ type NoahPayload = {
   discharge_w?: number;
   output_w?: number;
   solar_w?: number;
+  work_mode?: string;
   status?: string;
 };
 
@@ -103,6 +106,10 @@ function parsePayload(topic: string, raw: Buffer): NoahReading | null {
     dischargeW: asFiniteNumber(data.discharge_w),
     outputW: asFiniteNumber(data.output_w),
     solarW: asFiniteNumber(data.solar_w),
+    workMode:
+      typeof data.work_mode === "string" && data.work_mode.trim()
+        ? data.work_mode.trim()
+        : null,
     status: typeof data.status === "string" ? data.status : null,
     topic,
     updatedAt: new Date().toISOString(),

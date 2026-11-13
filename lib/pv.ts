@@ -65,6 +65,8 @@ async function loadPvRest(): Promise<PvRestSnapshot> {
   let socPct: number | null = null;
   let chargeW: number | null = null;
   let dischargeW: number | null = null;
+  let noahSolarW: number | null = null;
+  let workMode: string | null = null;
   let solarW: number | null = null;
 
   const tasks: Promise<void>[] = [];
@@ -81,6 +83,8 @@ async function loadPvRest(): Promise<PvRestSnapshot> {
           socPct = reading.socPct;
           chargeW = reading.chargeW;
           dischargeW = reading.dischargeW;
+          noahSolarW = reading.solarW;
+          workMode = reading.workMode;
         })
         .catch((error: unknown) => {
           warnings.push(warningFrom(error, "NOAH SoC nicht verfügbar"));
@@ -110,6 +114,8 @@ async function loadPvRest(): Promise<PvRestSnapshot> {
     socPct,
     chargeW,
     dischargeW,
+    noahSolarW,
+    workMode,
     solarW,
     fetchedAt: new Date().toISOString(),
     warnings,

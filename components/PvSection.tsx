@@ -48,6 +48,27 @@ function batteryFlowLabel(data: PvSnapshot | undefined): string | null {
   return null;
 }
 
+function workModeLabel(mode: string | null | undefined): string | null {
+  if (!mode) return null;
+  switch (mode.trim().toLowerCase()) {
+    case "load_first":
+      return "Verbrauch zuerst";
+    case "battery_first":
+      return "Batterie zuerst";
+    default:
+      return mode.replaceAll("_", " ");
+  }
+}
+
+function batteryMetaLine(data: PvSnapshot | undefined): string {
+  const parts = ["Growatt NOAH 2000"];
+  const mode = workModeLabel(data?.workMode);
+  if (mode) parts.push(mode);
+  const flow = batteryFlowLabel(data);
+  if (flow) parts.push(flow);
+  return parts.join(" · ");
+}
+
 export function PvPlaceholder() {
   return (
     <section aria-hidden className="opacity-40">
@@ -57,7 +78,11 @@ export function PvPlaceholder() {
         <p className="mt-0.5 text-[2.75rem] font-semibold leading-none">—</p>
       </div>
       <ul className="mt-6 flex flex-col gap-5">
-        {["Einspeisung aus Photovoltaik", "Batterie Ladestand"].map((label) => (
+        {[
+          "Einspeisung aus Photovoltaik",
+          "Batterie Ladestand",
+          "Solar-Eingang NOAH",
+        ].map((label) => (
           <li key={label}>
             <p className="text-sm font-medium text-muted">{label}</p>
             <p className="mt-0.5 text-[2.1rem] font-semibold leading-none">—</p>
@@ -102,6 +127,8 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
           socPct: initialData.socPct,
           chargeW: initialData.chargeW,
           dischargeW: initialData.dischargeW,
+          noahSolarW: initialData.noahSolarW,
+          workMode: initialData.workMode,
           solarW: initialData.solarW,
           fetchedAt: initialData.fetchedAt,
           warnings: initialData.warnings,
@@ -174,6 +201,8 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
               socPct: null,
               chargeW: null,
               dischargeW: null,
+              noahSolarW: null,
+              workMode: null,
               solarW: null,
               fetchedAt: new Date().toISOString(),
               warnings: [message],
@@ -214,11 +243,13 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
     loading: state.status === "loading",
     hasData: Boolean(
       data &&
-        (data.socPct !== null || data.solarW !== null || data.houseW !== null),
+        (data.socPct !== null ||
+          data.noahSolarW !== null ||
+          data.solarW !== null ||
+          data.houseW !== null),
     ),
     error: state.status === "error",
   });
-  const flow = batteryFlowLabel(data);
 
   return (
     <section className="animate-fade-up" aria-labelledby="pv-heading">
@@ -254,9 +285,15 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
           <p className="mt-0.5 text-[2.1rem] font-semibold leading-none tracking-tight tabular-nums">
             {formatSoc(data?.socPct ?? null)}
           </p>
+          <p className="mt-1 text-[0.7rem] text-muted">{batteryMetaLine(data)}</p>
+        </li>
+        <li>
+          <p className="text-sm font-medium text-muted">Solar-Eingang NOAH</p>
+          <p className="mt-0.5 text-[2.1rem] font-semibold leading-none tracking-tight tabular-nums">
+            {formatWatts(data?.noahSolarW ?? null)}
+          </p>
           <p className="mt-1 text-[0.7rem] text-muted">
-            Growatt NOAH 2000
-            {flow ? ` · ${flow}` : ""}
+            Growatt NOAH 2000 · PV an Batterie
           </p>
         </li>
       </ul>

@@ -14,6 +14,11 @@ export type PvRestSnapshot = {
   chargeW: number | null;
   /** Battery discharge power (W) when NOAH reports it. */
   dischargeW: number | null;
+  /** PV input into the NOAH appliance (W), not EZ1-M. */
+  noahSolarW: number | null;
+  /** Growatt work mode, e.g. load_first / battery_first. */
+  workMode: string | null;
+  /** APsystems EZ1-M generation (W). */
   solarW: number | null;
   fetchedAt: string;
   warnings: string[];
@@ -23,6 +28,8 @@ export type PvSnapshot = {
   socPct: number | null;
   chargeW: number | null;
   dischargeW: number | null;
+  noahSolarW: number | null;
+  workMode: string | null;
   solarW: number | null;
   houseW: number | null;
   /** solarW − houseW when both readings exist. */
@@ -52,6 +59,8 @@ export function mergePvParts(
     socPct: rest?.socPct ?? null,
     chargeW: rest?.chargeW ?? null,
     dischargeW: rest?.dischargeW ?? null,
+    noahSolarW: rest?.noahSolarW ?? null,
+    workMode: rest?.workMode ?? null,
     solarW,
     houseW,
     netW: solarW !== null && houseW !== null ? solarW - houseW : null,
