@@ -75,7 +75,10 @@ services:
     security_opt: [no-new-privileges:true]
     mem_limit: 64m
     pids_limit: 64
-    # Internal network only: no egress, not published on the host.
+    # Publish MQTT only on the LAN address (not 0.0.0.0). Compose network
+    # `mqtt` stays internal; dashboard/noah-mqtt still use mosquitto:1883.
+    ports:
+      - "192.168.130.1:1883:1883"
     networks:
       - mqtt
 
