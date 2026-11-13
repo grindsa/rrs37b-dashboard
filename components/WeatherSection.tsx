@@ -117,7 +117,7 @@ export function WeatherSection({
   });
 
   return (
-    <section className="animate-fade-up delay-2" aria-labelledby="weather-heading">
+    <section aria-labelledby="weather-heading">
       <div className="flex items-end justify-between gap-3">
         <h2 id="weather-heading" className="section-label">
           Wetter
@@ -166,7 +166,8 @@ export function WeatherSection({
       ) : null}
 
       {weather ? (
-        <>
+        // Fade only the first paint of live values — not later polls.
+        <div className="animate-fade-in">
           <div
             className={[
               "mt-5 flex items-center gap-4 transition-opacity duration-300",
@@ -217,7 +218,7 @@ export function WeatherSection({
               </li>
             ))}
           </ul>
-        </>
+        </div>
       ) : (
         <div className="mt-5 opacity-40" aria-hidden>
           <div className="flex items-center gap-4">

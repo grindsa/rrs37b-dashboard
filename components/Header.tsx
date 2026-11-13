@@ -8,7 +8,7 @@ export function Header({
   initialAuth?: AuthStatus;
 }) {
   return (
-    <header className="animate-fade-up flex items-start justify-between gap-4">
+    <header className="flex items-start justify-between gap-4">
       <div className="min-w-0">
         <h1 className="text-[2.85rem] font-semibold leading-none tracking-tight text-accent sm:text-5xl">
           RRS37

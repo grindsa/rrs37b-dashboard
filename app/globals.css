@@ -227,8 +227,22 @@ body {
   }
 }
 
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .animate-fade-up {
   animation: fade-up 0.55s ease-out both;
+}
+
+/** Values only — section chrome stays visible while data loads. */
+.animate-fade-in {
+  animation: fade-in 0.45s ease-out both;
 }
 
 .delay-1 {
@@ -242,7 +256,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-fade-up {
+  .animate-fade-up,
+  .animate-fade-in {
     animation: none;
   }
 }

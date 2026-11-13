@@ -190,7 +190,7 @@ export function SensorsSection({
         : [];
 
   return (
-    <section className="animate-fade-up delay-1" aria-labelledby="sensors-heading">
+    <section aria-labelledby="sensors-heading">
       <div className="flex items-end justify-between gap-3">
         <h2 id="sensors-heading" className="section-label">
           Sensoren
@@ -203,7 +203,8 @@ export function SensorsSection({
       </div>
 
       {sensors?.length ? (
-        <ul className="mt-5 flex flex-col gap-6">
+        // Fade only the first paint of live values — list remounts once, not on polls.
+        <ul className="mt-5 flex flex-col gap-6 animate-fade-in">
           {sensors.map((sensor) => (
             <SensorRow key={sensor.id} sensor={sensor} nowMs={nowMs} />
           ))}

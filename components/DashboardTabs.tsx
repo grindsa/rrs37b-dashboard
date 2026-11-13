@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -220,8 +221,14 @@ export function DashboardTabPanel({
   const selected = active === id;
   // Mount on first visit only — avoids probing Tuya/Shelly while another tab is open.
   const [mounted, setMounted] = useState(selected);
+  const wasMountedRef = useRef(selected);
+  // Fade on tab switch only — default home tab must paint visible immediately.
+  const [enterAnim, setEnterAnim] = useState(false);
   useEffect(() => {
-    if (selected) setMounted(true);
+    if (!selected) return;
+    if (wasMountedRef.current) setEnterAnim(true);
+    wasMountedRef.current = true;
+    setMounted(true);
   }, [selected]);
 
   return (
@@ -230,7 +237,7 @@ export function DashboardTabPanel({
       id={`${baseId}-panel-${id}`}
       aria-labelledby={`${baseId}-tab-${id}`}
       hidden={!selected}
-      className={selected ? "animate-fade-up" : undefined}
+      className={selected && enterAnim ? "animate-fade-up" : undefined}
     >
       {mounted ? children : null}
     </div>

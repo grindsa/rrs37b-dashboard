@@ -6,52 +6,23 @@ import {
   DashboardTabs,
 } from "@/components/DashboardTabs";
 import { LockedPanel } from "@/components/LockedPanel";
-import {
-  SensorsPlaceholder,
-  SensorsSection,
-} from "@/components/SensorsSection";
-import {
-  WeatherPlaceholder,
-  WeatherSection,
-} from "@/components/WeatherSection";
+import { SensorsSection } from "@/components/SensorsSection";
+import { WeatherSection } from "@/components/WeatherSection";
 import { BvgSection } from "@/components/BvgSection";
 import { PvSection } from "@/components/PvSection";
 import { SmarthomeSection } from "@/components/SmarthomeSection";
 import { HeatingSection } from "@/components/HeatingSection";
 import { getAuthStatus, isAuthenticated } from "@/lib/auth";
-import { getShellySensors } from "@/lib/shelly";
-import { getWeather } from "@/lib/weather";
-
-async function SensorsBlock() {
-  await connection();
-  let initialData;
-  try {
-    initialData = await getShellySensors();
-  } catch {
-    initialData = undefined;
-  }
-  return <SensorsSection initialData={initialData} />;
-}
-
-async function WeatherBlock() {
-  await connection();
-  let initialData;
-  try {
-    initialData = await getWeather();
-  } catch {
-    initialData = undefined;
-  }
-  return <WeatherSection initialData={initialData} />;
-}
 
 /**
  * Session cookie + expiry (Date.now) must stay behind <Suspense> with
  * `await connection()` when Cache Components is enabled — otherwise Next
  * fails with blocking-prerender-dynamic / blocking-prerender-current-time.
  *
- * Tab bodies are children of the client tab shell (not props) so Suspense can
- * stream. Only the home tab is SSR-fetched; BVG / PV / Smarthome load on the
- * client after paint so slow Shelly cover polls cannot block first paint.
+ * All tab bodies load on the client after paint so slow Shelly / weather
+ * polls cannot block first paint. The home tab shows empty placeholders
+ * immediately and fades values in when `/api/sensors` and `/api/weather`
+ * resolve.
  */
 async function AuthGatedHome() {
   // Session expiry uses Date.now() — must be request-time under Cache Components.
@@ -67,13 +38,9 @@ async function AuthGatedHome() {
         <DashboardTabs>
           <DashboardTabPanel id="home">
             <div className="flex flex-col gap-8">
-              <Suspense fallback={<SensorsPlaceholder />}>
-                <SensorsBlock />
-              </Suspense>
+              <SensorsSection />
               <hr className="section-divider" />
-              <Suspense fallback={<WeatherPlaceholder />}>
-                <WeatherBlock />
-              </Suspense>
+              <WeatherSection />
             </div>
           </DashboardTabPanel>
 
