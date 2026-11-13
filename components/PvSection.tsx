@@ -57,7 +57,7 @@ export function PvPlaceholder() {
         <p className="mt-0.5 text-[2.75rem] font-semibold leading-none">—</p>
       </div>
       <ul className="mt-6 flex flex-col gap-5">
-        {["Einspeisung aus Photovoltaik", "Batterie"].map((label) => (
+        {["Einspeisung aus Photovoltaik", "Batterie Ladestand"].map((label) => (
           <li key={label}>
             <p className="text-sm font-medium text-muted">{label}</p>
             <p className="mt-0.5 text-[2.1rem] font-semibold leading-none">—</p>
@@ -250,7 +250,7 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
           <p className="mt-1 text-[0.7rem] text-muted">APsystems EZ1-M</p>
         </li>
         <li>
-          <p className="text-sm font-medium text-muted">Batterie</p>
+          <p className="text-sm font-medium text-muted">Batterie Ladestand</p>
           <p className="mt-0.5 text-[2.1rem] font-semibold leading-none tracking-tight tabular-nums">
             {formatSoc(data?.socPct ?? null)}
           </p>
