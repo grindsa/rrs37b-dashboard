@@ -27,11 +27,9 @@ async function fetchPvPart<T>(part: "house" | "rest"): Promise<T> {
   return (await res.json()) as T;
 }
 
-function formatWatts(w: number | null, signed = false): string {
+function formatWatts(w: number | null): string {
   if (w === null || !Number.isFinite(w)) return "—";
-  const rounded = Math.round(w);
-  if (signed && rounded > 0) return `+${rounded} W`;
-  return `${rounded} W`;
+  return `${Math.round(w)} W`;
 }
 
 function formatSoc(pct: number | null): string {
@@ -55,11 +53,11 @@ export function PvPlaceholder() {
     <section aria-hidden className="opacity-40">
       <p className="section-label">Photovoltaik</p>
       <div className="mt-5">
-        <p className="text-sm font-medium text-muted">Hausverbrauch</p>
+        <p className="text-sm font-medium text-muted">Einspeisung aus öffentlichem Stromnetz</p>
         <p className="mt-0.5 text-[2.75rem] font-semibold leading-none">—</p>
       </div>
       <ul className="mt-6 flex flex-col gap-5">
-        {["Erzeugung", "Batterie"].map((label) => (
+        {["Einspeisung aus Photovoltaik", "Batterie"].map((label) => (
           <li key={label}>
             <p className="text-sm font-medium text-muted">{label}</p>
             <p className="mt-0.5 text-[2.1rem] font-semibold leading-none">—</p>
@@ -236,7 +234,7 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
       </div>
 
       <div className="mt-5">
-        <p className="text-sm font-medium text-muted">Hausverbrauch</p>
+        <p className="text-sm font-medium text-muted">Einspeisung aus öffentlichem Stromnetz</p>
         <p className="mt-0.5 text-[2.75rem] font-semibold leading-none tracking-tight tabular-nums">
           {formatWatts(data?.houseW ?? null)}
         </p>
@@ -245,7 +243,7 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
 
       <ul className="mt-6 flex flex-col gap-5">
         <li>
-          <p className="text-sm font-medium text-muted">Erzeugung</p>
+          <p className="text-sm font-medium text-muted">Einspeisung aus Photovoltaik</p>
           <p className="mt-0.5 text-[2.1rem] font-semibold leading-none tracking-tight tabular-nums">
             {formatWatts(data?.solarW ?? null)}
           </p>
@@ -261,17 +259,6 @@ export function PvSection({ initialData }: { initialData?: PvSnapshot }) {
             {flow ? ` · ${flow}` : ""}
           </p>
         </li>
-        {data?.netW !== null && data?.netW !== undefined ? (
-          <li>
-            <p className="text-sm font-medium text-muted">Saldo</p>
-            <p className="mt-0.5 text-[2.1rem] font-semibold leading-none tracking-tight tabular-nums">
-              {formatWatts(data.netW, true)}
-            </p>
-            <p className="mt-1 text-[0.7rem] text-muted">
-              Erzeugung − Hausverbrauch
-            </p>
-          </li>
-        ) : null}
       </ul>
 
       {data?.fetchedAt ? (
