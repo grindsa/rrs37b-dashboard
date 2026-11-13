@@ -75,12 +75,11 @@ services:
     security_opt: [no-new-privileges:true]
     mem_limit: 64m
     pids_limit: 64
-    # Publish MQTT only on the LAN address (not 0.0.0.0). Compose network
-    # `mqtt` stays internal; dashboard/noah-mqtt still use mosquitto:1883.
     ports:
       - "192.168.130.1:1883:1883"
     networks:
       - mqtt
+      - mqtt-publish
 
   noah-mqtt:
     profiles: ["noah"]
@@ -122,5 +121,9 @@ networks:
   # Broker traffic only; internal means no route out of the host.
   mqtt:
     internal: true
+  # Non-internal side network so Mosquitto can publish 1883 on the host.
+  # Only mosquitto joins this; it must not be internal: true.
+  mqtt-publish:
+    driver: bridge
   egress:
     driver: bridge
