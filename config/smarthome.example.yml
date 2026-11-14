@@ -142,18 +142,27 @@ plugs:
     switchId: 0
     hidden: true
 
-# BLU H&T sensors. `label` is one of Aussen, Arbeitszimmer, Wohnzimmer;
-# `gateway` must match a plug id. Get `mac` from GET /api/sensors/discover.
+# BLU H&T sensors. `label` is one of Aussen, Arbeitszimmer, Wohnzimmer,
+# Abstellkammer; `gateway` must match a plug id. Optional `group: <id>` puts
+# the sensor on that Heizung floor (read-only). Add `home: true` to keep it on
+# home Klima as well (default: Heizung only when grouped).
+# Get `mac` from GET /api/sensors/discover.
 sensors:
   - label: Aussen
     gateway: gw-aussen-arbeit
     mac: aa:bb:cc:00:11:22
+    group: dg
+    home: true
   - label: Arbeitszimmer
     gateway: gw-aussen-arbeit
     mac: aa:bb:cc:00:11:33
   - label: Wohnzimmer
     gateway: gw-wohnzimmer
     mac: aa:bb:cc:00:11:44
+  - label: Abstellkammer
+    gateway: gw-aussen-arbeit
+    mac: aa:bb:cc:00:11:55
+    group: dg
 
 # Gira System 3000 thermostats (gira-ble-api). `id` must match the proxy.
 # `group` may share any groups[].id (e.g. dg / og1 / eg). Optional `name`

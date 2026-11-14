@@ -150,9 +150,16 @@ sensors:
   - label: Aussen
     gateway: gw-aussen-arbeit
     mac: ...
+    group: dg
+    home: true           # also on home Klima
+  # Optional group → Heizung floor (read-only); omit home: → Heizung only
+  - label: Abstellkammer
+    gateway: gw-aussen-arbeit
+    mac: ...
+    group: dg
 ```
 
-Live values: `GET /api/sensors` (45s TTL cache).
+Live home values: `GET /api/sensors` (45s TTL; grouped sensors need `home: true`). Grouped BLU rows appear on Heizung via `GET /api/heating`.
 
 ## Photovoltaik
 
@@ -358,9 +365,18 @@ plugs:
     ip: 192.168.x.x
     hidden: true         # Shelly BLE gateway — not shown, not switchable
 sensors:
-  - label: Wohnzimmer    # Aussen | Arbeitszimmer | Wohnzimmer
+  - label: Wohnzimmer    # Aussen | Arbeitszimmer | Wohnzimmer | Abstellkammer
     gateway: gw-wohnzimmer
     mac: aa:bb:cc:dd:ee:ff
+  - label: Aussen
+    gateway: gw-aussen-arbeit
+    mac: aa:bb:cc:dd:ee:ff
+    group: dg
+    home: true           # optional with group → also home Klima
+  - label: Abstellkammer
+    gateway: gw-aussen-arbeit
+    mac: aa:bb:cc:dd:ee:ff
+    group: dg            # optional → Heizung floor (home: false by default)
 meters:
   - id: pro3em           # first meter = Hausverbrauch
     ip: 192.168.x.x
@@ -368,7 +384,7 @@ meters:
 ```
 
 - `id` values must be unique within each list; sensor labels must be unique.
-- Groups are untyped (`id` + `name` only). Do not nest devices under groups — use top-level `covers` / `lamps` / `thermostats` with `group: <id>`. A leftover `type:` on a group is ignored (logged once).
+- Groups are untyped (`id` + `name` only). Do not nest devices under groups — use top-level `covers` / `lamps` / `thermostats` / `sensors` with `group: <id>`. A leftover `type:` on a group is ignored (logged once). Sensor `group` is optional (Heizung); add `home: true` to keep it on home Klima too.
 - `coverId` / `switchId` / `emId` default to `0` when omitted.
 - Cover `vendor` is `shelly` (default) or `gira`. Gira covers share `GIRA_BLE_API_URL` / `GIRA_BLE_API_TOKEN` with Heizung; `id` must match gira-ble-api `covers[].id`. Do not set `ip` / `coverId` / `password` on Gira covers.
 - Cover `group` is optional. Omit it to show the cover as its own Rollos section (same ↑/↓ as a floor header, no expandable detail list). Standalone cover `id` must not collide with a `groups[].id`.
@@ -376,7 +392,7 @@ meters:
 - Plug `vendor` is `shelly` (default), `tapo`, or `fsapi`. Sensor `gateway` plugs must be Shelly (Tapo/FSAPI as gateway is a config error).
 - `password` is optional on Shelly covers, plugs and meters. Without it, `SHELLY_RPC_PASSWORD` is used; the server log lists which devices still fall back. Entries sharing an IP must not have different passwords. Do not set `password` on Tapo or FSAPI plugs.
 - FSAPI entries (`vendor: fsapi`) support power on/off. Set `volume_control: true` for volume ±1 (lauter/leiser); default `false`. Optional `pin` (default `1234`) and `port` (default `80`).
-- Empty groups are hidden per tab (no covers → no Rollo section; no lamps → no Lampen section; no live thermostats → no Heizung floor). Unknown `group` or `gateway` references are config errors.
+- Empty groups are hidden per tab (no covers → no Rollo section; no lamps → no Lampen section; no live thermostats/sensors → no Heizung floor). Unknown `group` or `gateway` references are config errors.
 - Optional path override: `SMARTHOME_CONFIG_FILE` (Compose sets `/app/config/smarthome.yml`).
 - If the live file is missing, the tab shows `config/smarthome.example.yml` (no LAN probes; control, sensors and Hausverbrauch disabled).
 

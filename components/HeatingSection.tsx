@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type {
   HeatingGroupStatus,
+  HeatingSensorStatus,
   HeatingSnapshot,
   HeatingThermostatStatus,
 } from "@/lib/heating";
@@ -12,7 +13,12 @@ import {
   SETPOINT_STEP_C,
   clampSetpointC,
 } from "@/lib/heating-setpoint";
-import { formatRelativeAge, formatTemp } from "@/lib/format";
+import {
+  formatBattery,
+  formatHumidity,
+  formatRelativeAge,
+  formatTemp,
+} from "@/lib/format";
 import { isPageHidden, onForeground } from "@/lib/foreground-refresh";
 import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 
@@ -266,6 +272,82 @@ function ThermostatRow({
   );
 }
 
+function ClimateSensorRow({
+  sensor,
+  nowMs,
+}: {
+  sensor: HeatingSensorStatus;
+  nowMs: number | null;
+}) {
+  const age = formatRelativeAge(sensor.updatedAt, nowMs);
+  const statusParts = [
+    sensor.online ? "online" : "offline",
+    age,
+    sensor.humidityPct !== null ? formatHumidity(sensor.humidityPct) : null,
+    sensor.batteryPct !== null
+      ? `${formatBattery(sensor.batteryPct)} Batt`
+      : null,
+  ].filter(Boolean);
+
+  return (
+    <li className="border-t border-hairline pt-3 first:border-t-0 first:pt-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-foreground">
+            {sensor.name}
+          </p>
+          <p
+            className={[
+              "mt-0.5 text-[0.55rem] leading-snug",
+              sensor.online ? "text-muted" : "text-warning",
+            ].join(" ")}
+          >
+            {statusParts.join(" · ")}
+          </p>
+          {sensor.error ? (
+            <p className="mt-1 text-xs text-warning">{sensor.error}</p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 items-center gap-4">
+          <IstTemperature
+            temperatureC={sensor.temperatureC}
+            heatingActive={null}
+          />
+          {/* Match thermostat Soll column width so Ist lines up */}
+          <div
+            className="flex items-center gap-px"
+            aria-hidden
+          >
+            <span className="inline-flex h-7 w-7" />
+            <span className="min-w-[2.75rem] px-0.5" />
+            <span className="inline-flex h-7 w-7" />
+          </div>
+        </div>
+      </div>
+    </li>
+  );
+}
+
+function groupMetaLabel(group: HeatingGroupStatus, expanded: boolean): string {
+  const tCount = group.thermostats.length;
+  const sCount = group.sensors.length;
+  const parts: string[] = [];
+  if (tCount > 0) {
+    parts.push(tCount === 1 ? "1 Thermostat" : `${tCount} Thermostate`);
+  }
+  if (sCount > 0) {
+    parts.push(sCount === 1 ? "1 Sensor" : `${sCount} Sensoren`);
+  }
+  const onlineCount =
+    group.thermostats.filter((t) => t.online).length +
+    group.sensors.filter((s) => s.online).length;
+  if (tCount + sCount > 0) {
+    parts.push(`${onlineCount} online`);
+  }
+  if (!expanded) parts.push("antippen für Details");
+  return parts.join(" · ");
+}
+
 function GroupBlock({
   group,
   nowMs,
@@ -280,9 +362,8 @@ function GroupBlock({
   onStep: (id: string, delta: number) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const count = group.thermostats.length;
-  const onlineCount = group.thermostats.filter((t) => t.online).length;
   const primary = group.thermostats.find((t) => t.groupPrimary);
+  const sensors = group.sensors ?? [];
 
   return (
     <section
@@ -295,7 +376,7 @@ function GroupBlock({
         <button
           type="button"
           aria-expanded={expanded}
-          aria-controls={`heating-group-thermostats-${group.id}`}
+          aria-controls={`heating-group-members-${group.id}`}
           onClick={() => setExpanded((v) => !v)}
           className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
         >
@@ -310,9 +391,7 @@ function GroupBlock({
               {group.name}
             </span>
             <span className="device-group-meta">
-              {count === 1 ? "1 Thermostat" : `${count} Thermostate`}
-              {count > 0 ? ` · ${onlineCount} online` : null}
-              {expanded ? "" : " · antippen für Details"}
+              {groupMetaLabel(group, expanded)}
             </span>
           </span>
         </button>
@@ -327,7 +406,7 @@ function GroupBlock({
 
       {expanded ? (
         <ul
-          id={`heating-group-thermostats-${group.id}`}
+          id={`heating-group-members-${group.id}`}
           className="device-group-body flex flex-col gap-3"
         >
           {group.thermostats.map((t) => (
@@ -339,6 +418,9 @@ function GroupBlock({
               actionError={actionErrors[t.id]}
               onStep={(delta) => onStep(t.id, delta)}
             />
+          ))}
+          {sensors.map((s) => (
+            <ClimateSensorRow key={s.id} sensor={s} nowMs={nowMs} />
           ))}
         </ul>
       ) : null}
@@ -667,7 +749,7 @@ export function HeatingSection() {
 
       {emptyConfigured ? (
         <p className="mt-5 text-sm text-muted">
-          Keine Thermostate in der Config / API.
+          Keine Thermostate / Sensoren in der Config / API.
         </p>
       ) : null}
 

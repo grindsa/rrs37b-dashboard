@@ -13,6 +13,10 @@ export type SensorBinding = {
   gatewayIp: string;
   /** Optional BLU MAC (aa:bb:…); required for reliable mapping once paired. */
   mac?: string;
+  /** Heizung floor group when set; null = home Klima only. */
+  groupId: string | null;
+  /** Also listed on home Klima (always true when groupId is null). */
+  showOnHome: boolean;
 };
 
 /** Sensor → gateway mapping from the `sensors` section of smarthome.yml. */
@@ -22,12 +26,16 @@ export function getShellyBindings(): SensorBinding[] {
   if (live.config.sensors.length === 0) {
     throw new Error("Keine Sensoren unter sensors in config/smarthome.yml");
   }
-  return live.config.sensors.map(({ label, gatewayId, gatewayIp, mac }) => ({
-    label,
-    gatewayId,
-    gatewayIp,
-    mac,
-  }));
+  return live.config.sensors.map(
+    ({ label, gatewayId, gatewayIp, mac, groupId, showOnHome }) => ({
+      label,
+      gatewayId,
+      gatewayIp,
+      mac,
+      groupId,
+      showOnHome,
+    }),
+  );
 }
 
 export type ShellyRpcPassword = {

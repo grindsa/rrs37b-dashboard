@@ -5,7 +5,8 @@
  * energy meters, and Gira thermostats (via gira-ble-api — layout only; live
  * state from the proxy).
  * Groups are untyped — each tab only shows groups that have matching devices
- * (covers / lamps / thermostats). Empty groups are hidden in that tab.
+ * (covers / lamps / thermostats / grouped BLU sensors). Empty groups are hidden
+ * in that tab.
  * Shelly devices without `password` use SHELLY_RPC_PASSWORD from env.
  * Tapo plugs use TAPO_EMAIL / TAPO_PASSWORD from env (local KLAP).
  * FSAPI devices (e.g. Hama IR100/IR110) use optional YAML `pin` / `port` (LAN HTTP).
@@ -16,7 +17,12 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 
-export const SENSOR_LABELS = ["Aussen", "Arbeitszimmer", "Wohnzimmer"] as const;
+export const SENSOR_LABELS = [
+  "Aussen",
+  "Arbeitszimmer",
+  "Wohnzimmer",
+  "Abstellkammer",
+] as const;
 export type SensorLabel = (typeof SENSOR_LABELS)[number];
 
 export const COVER_VENDORS = ["shelly", "gira"] as const;
@@ -136,6 +142,17 @@ export type SmarthomeSensorConfig = {
   gatewayIp: string;
   /** BLU MAC (aa:bb:…); optional until paired, then required for reliable mapping. */
   mac?: string;
+  /**
+   * Optional floor/room group (`group:` in YAML). When set, the sensor is shown
+   * on the Heizung tab for that floor (read-only). Home Klima visibility is
+   * controlled by {@link showOnHome}.
+   */
+  groupId: string | null;
+  /**
+   * When `group` is set: `home: true` keeps the sensor on the home Klima list
+   * as well (default false = Heizung only). Without `group`, always true.
+   */
+  showOnHome: boolean;
 };
 
 export type SmarthomeMeterConfig = {
@@ -579,6 +596,7 @@ function parseSensor(
   raw: unknown,
   pathLabel: string,
   plugsById: Map<string, SmarthomePlugConfig>,
+  groupIds: ReadonlySet<string>,
 ): SmarthomeSensorConfig {
   const obj = asRecord(raw, pathLabel);
   const gatewayId = asString(obj.gateway, `${pathLabel}.gateway`);
@@ -593,11 +611,28 @@ function parseSensor(
       `${ERR_PREFIX}: ${pathLabel}.gateway "${gatewayId}" must be vendor shelly (got ${gateway.vendor}) — BLU gateways cannot be Tapo/FSAPI`,
     );
   }
+  const groupId = asOptionalCoverGroupId(
+    obj.group,
+    `${pathLabel}.group`,
+    groupIds,
+  );
+  const homeRaw = obj.home;
+  if (groupId === null && homeRaw !== undefined && homeRaw !== null) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.home is only valid together with group:`,
+    );
+  }
   return {
     label: asSensorLabel(obj.label, `${pathLabel}.label`),
     gatewayId,
     gatewayIp: gateway.ip,
     mac: asOptionalMac(obj.mac, `${pathLabel}.mac`),
+    groupId,
+    // No group → always home. With group → home only when home: true.
+    showOnHome:
+      groupId === null
+        ? true
+        : asOptionalBoolean(homeRaw, `${pathLabel}.home`),
   };
 }
 
@@ -677,7 +712,7 @@ function parseConfig(parsed: unknown): ParseResult {
   const plugsById = new Map(plugs.map((p) => [p.id, p]));
 
   const sensors = asArray(root.sensors, "sensors").map((s, i) =>
-    parseSensor(s, `sensors[${i}]`, plugsById),
+    parseSensor(s, `sensors[${i}]`, plugsById, groupIds),
   );
   assertUnique(sensors.map((s) => s.label), "sensor label");
 
@@ -1018,4 +1053,14 @@ export function findThermostat(
   thermostatId: string,
 ): SmarthomeThermostatConfig | undefined {
   return config.thermostats.find((t) => t.id === thermostatId);
+}
+
+/** Home Klima list — ungrouped sensors, or grouped with `home: true`. */
+export function homeSensors(config: SmarthomeConfig): SmarthomeSensorConfig[] {
+  return config.sensors.filter((s) => s.showOnHome);
+}
+
+/** BLU sensors assigned to a Heizung floor via YAML `group`. */
+export function heatingSensors(config: SmarthomeConfig): SmarthomeSensorConfig[] {
+  return config.sensors.filter((s) => s.groupId !== null);
 }

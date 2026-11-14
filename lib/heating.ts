@@ -1,13 +1,14 @@
 /**
  * Heating snapshot: join smarthome.yml thermostat layout with live
- * gira-ble-api state. Floor sections reuse shared group ids/names; empty
- * floors (no live members) are omitted.
+ * gira-ble-api state, plus optional BLU H&T sensors that have `group:` set
+ * (read-only climate rows on the same floor). Empty floors are omitted.
  */
 
 import {
   findThermostat,
   getLiveSmarthomeConfig,
   getSmarthomeConfig,
+  heatingSensors,
   type SmarthomeConfig,
   type SmarthomeThermostatConfig,
 } from "@/lib/smarthome-config";
@@ -19,6 +20,7 @@ import {
   type GiraThermostat,
 } from "@/lib/gira-ble";
 import { takeControlSlot } from "@/lib/control-throttle";
+import { getShellySensors, type ShellySensor } from "@/lib/shelly";
 
 export type HeatingThermostatStatus = {
   id: string;
@@ -36,10 +38,23 @@ export type HeatingThermostatStatus = {
   error: string | null;
 };
 
+/** Read-only BLU H&T assigned to a Heizung floor via YAML `group`. */
+export type HeatingSensorStatus = {
+  id: string;
+  name: string;
+  online: boolean;
+  temperatureC: number | null;
+  humidityPct: number | null;
+  batteryPct: number | null;
+  updatedAt: string | null;
+  error: string | null;
+};
+
 export type HeatingGroupStatus = {
   id: string;
   name: string;
   thermostats: HeatingThermostatStatus[];
+  sensors: HeatingSensorStatus[];
 };
 
 export type HeatingSnapshot = {
@@ -70,9 +85,26 @@ function toStatus(
   };
 }
 
+function toSensorStatus(
+  label: string,
+  live: ShellySensor | undefined,
+): HeatingSensorStatus {
+  return {
+    id: `blu:${label.toLowerCase()}`,
+    name: label,
+    online: live?.online ?? false,
+    temperatureC: live?.temperatureC ?? null,
+    humidityPct: live?.humidityPct ?? null,
+    batteryPct: live?.batteryPct ?? null,
+    updatedAt: live?.updatedAt ?? null,
+    error: live ? null : "Kein Messwert",
+  };
+}
+
 function buildGroups(
   config: SmarthomeConfig,
   byId: Map<string, GiraThermostat>,
+  shellyByLabel: Map<string, ShellySensor>,
 ): HeatingGroupStatus[] {
   return config.floorGroups
     .map((group) => {
@@ -83,13 +115,20 @@ function buildGroups(
         if (!live) continue;
         thermostats.push(toStatus(live, member.name, member.groupPrimary));
       }
+
+      const climate = config.sensors.filter((s) => s.groupId === group.id);
+      const sensors = climate.map((s) =>
+        toSensorStatus(s.label, shellyByLabel.get(s.label)),
+      );
+
       return {
         id: group.id,
         name: group.name,
         thermostats,
+        sensors,
       };
     })
-    .filter((g) => g.thermostats.length > 0);
+    .filter((g) => g.thermostats.length > 0 || g.sensors.length > 0);
 }
 
 function layoutWarnings(configLoad: ReturnType<typeof getSmarthomeConfig>): string[] {
@@ -98,14 +137,34 @@ function layoutWarnings(configLoad: ReturnType<typeof getSmarthomeConfig>): stri
   return [];
 }
 
+async function loadShellyByLabel(
+  config: SmarthomeConfig,
+  warnings: string[],
+): Promise<Map<string, ShellySensor>> {
+  if (heatingSensors(config).length === 0) return new Map();
+  try {
+    const result = await getShellySensors();
+    for (const w of result.warnings) {
+      if (!warnings.includes(w)) warnings.push(w);
+    }
+    return new Map(result.sensors.map((s) => [s.label, s]));
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "BLU-Sensoren fehlgeschlagen";
+    warnings.push(message);
+    return new Map();
+  }
+}
+
 export async function getHeatingSnapshot(): Promise<HeatingSnapshot> {
   const fetchedAt = new Date().toISOString();
   const load = getSmarthomeConfig();
   const warnings = layoutWarnings(load);
+  const shellyByLabel = await loadShellyByLabel(load.config, warnings);
 
   if (!isGiraBleConfigured()) {
     return {
-      groups: [],
+      groups: buildGroups(load.config, new Map(), shellyByLabel),
       fetchedAt,
       configured: false,
       warnings: [
@@ -119,7 +178,7 @@ export async function getHeatingSnapshot(): Promise<HeatingSnapshot> {
     const list = await listGiraThermostats();
     const byId = new Map(list.map((t) => [t.id, t]));
     return {
-      groups: buildGroups(load.config, byId),
+      groups: buildGroups(load.config, byId, shellyByLabel),
       fetchedAt,
       configured: true,
       warnings,
@@ -132,7 +191,7 @@ export async function getHeatingSnapshot(): Promise<HeatingSnapshot> {
           ? error.message
           : "Heizung-Status fehlgeschlagen";
     return {
-      groups: [],
+      groups: buildGroups(load.config, new Map(), shellyByLabel),
       fetchedAt,
       configured: true,
       warnings,
