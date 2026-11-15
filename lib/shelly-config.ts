@@ -9,9 +9,9 @@ export { UNKNOWN_SENSOR_MAC };
 
 export type SensorBinding = {
   label: SensorLabel;
-  /** Gateway plug id from smarthome.yml; safe to show in client warnings. */
+  /** Gateway plug or meter id from smarthome.yml; safe to show in client warnings. */
   gatewayId: string;
-  /** Gateway Plug IP that should see this BLU device. */
+  /** Gateway device IP that should see this BLU device. */
   gatewayIp: string;
   /** Optional BLU MAC (aa:bb:…), or `unknown` for demo readings. */
   mac?: string;

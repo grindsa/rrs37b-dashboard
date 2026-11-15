@@ -148,15 +148,15 @@ plugs:
     hidden: true
 
 # BLU H&T sensors. `label` is one of Aussen DG, Aussen EG, Arbeitszimmer,
-# Wohnzimmer, Abstellkammer; `gateway` must match a plug id. Optional
-# `group: <id>` puts the sensor on that Heizung floor (read-only). Add
-# `home: true` to keep it on home Klima as well (default: Heizung only when
-# grouped). Use `mac: unknown` for demo readings until the real MAC is known.
-# Get `mac` from GET /api/sensors/discover.
+# Wohnzimmer, Abstellkammer; `gateway` must match a Shelly plug id or a
+# meters id (e.g. Pro 3EM). Optional `group: <id>` puts the sensor on that
+# Heizung floor (read-only). Add `home: true` to keep it on home Klima as
+# well (default: Heizung only when grouped). Use `mac: unknown` for demo
+# readings until the real MAC is known. Get `mac` from GET /api/sensors/discover.
 sensors:
   - label: Aussen EG
-    gateway: placeholder
-    mac: unknown
+    gateway: pro3em
+    mac: aa:bb:cc:00:11:66
     group: eg
     home: true
   - label: Aussen DG

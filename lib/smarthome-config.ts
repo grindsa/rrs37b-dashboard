@@ -1,9 +1,9 @@
 /**
  * Smarthome device inventory from a YAML file: named groups (floors/rooms),
  * covers (Shelly 2PM or Gira 5367xx via gira-ble-api), lamps (LEDVANCE/Tuya),
- * plugs (Shelly, Tapo, or FSAPI), BLU sensors (via Shelly gateway plugs),
- * energy meters, and Gira thermostats (via gira-ble-api — layout only; live
- * state from the proxy).
+ * plugs (Shelly, Tapo, or FSAPI), BLU sensors (via Shelly gateway plugs or
+ * meters such as Pro 3EM), energy meters, and Gira thermostats (via
+ * gira-ble-api — layout only; live state from the proxy).
  * Groups are untyped — each tab only shows groups that have matching devices
  * (covers / lamps / thermostats / grouped BLU sensors). Empty groups are hidden
  * in that tab.
@@ -141,7 +141,10 @@ export type SmarthomePlugConfig = {
 
 export type SmarthomeSensorConfig = {
   label: SensorLabel;
-  /** Plug id of the BLE gateway that sees this BLU device. */
+  /**
+   * Id of the BLE gateway that sees this BLU device — a Shelly `plugs` entry
+   * or a `meters` entry (e.g. Pro 3EM).
+   */
   gatewayId: string;
   gatewayIp: string;
   /**
@@ -603,25 +606,50 @@ function parsePlug(raw: unknown, pathLabel: string): SmarthomePlugConfig {
   };
 }
 
+function resolveSensorGateway(
+  gatewayId: string,
+  pathLabel: string,
+  plugsById: ReadonlyMap<string, SmarthomePlugConfig>,
+  metersById: ReadonlyMap<string, SmarthomeMeterConfig>,
+): { gatewayId: string; gatewayIp: string } {
+  const plug = plugsById.get(gatewayId);
+  const meter = metersById.get(gatewayId);
+  if (plug && meter) {
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel}.gateway "${gatewayId}" matches both plugs and meters — ids must be unique across those lists`,
+    );
+  }
+  if (plug) {
+    if (plug.vendor !== "shelly") {
+      throw new Error(
+        `${ERR_PREFIX}: ${pathLabel}.gateway "${gatewayId}" must be vendor shelly (got ${plug.vendor}) — BLU gateways cannot be Tapo/FSAPI`,
+      );
+    }
+    return { gatewayId, gatewayIp: plug.ip };
+  }
+  if (meter) {
+    return { gatewayId, gatewayIp: meter.ip };
+  }
+  throw new Error(
+    `${ERR_PREFIX}: ${pathLabel}.gateway "${gatewayId}" is not defined under plugs or meters`,
+  );
+}
+
 function parseSensor(
   raw: unknown,
   pathLabel: string,
-  plugsById: Map<string, SmarthomePlugConfig>,
+  plugsById: ReadonlyMap<string, SmarthomePlugConfig>,
+  metersById: ReadonlyMap<string, SmarthomeMeterConfig>,
   groupIds: ReadonlySet<string>,
 ): SmarthomeSensorConfig {
   const obj = asRecord(raw, pathLabel);
   const gatewayId = asString(obj.gateway, `${pathLabel}.gateway`);
-  const gateway = plugsById.get(gatewayId);
-  if (!gateway) {
-    throw new Error(
-      `${ERR_PREFIX}: ${pathLabel}.gateway "${gatewayId}" is not defined under plugs`,
-    );
-  }
-  if (gateway.vendor !== "shelly") {
-    throw new Error(
-      `${ERR_PREFIX}: ${pathLabel}.gateway "${gatewayId}" must be vendor shelly (got ${gateway.vendor}) — BLU gateways cannot be Tapo/FSAPI`,
-    );
-  }
+  const { gatewayIp } = resolveSensorGateway(
+    gatewayId,
+    pathLabel,
+    plugsById,
+    metersById,
+  );
   const groupId = asOptionalCoverGroupId(
     obj.group,
     `${pathLabel}.group`,
@@ -636,7 +664,7 @@ function parseSensor(
   return {
     label: asSensorLabel(obj.label, `${pathLabel}.label`),
     gatewayId,
-    gatewayIp: gateway.ip,
+    gatewayIp,
     mac: asOptionalMac(obj.mac, `${pathLabel}.mac`),
     groupId,
     // No group → always home. With group → home only when home: true.
@@ -722,15 +750,23 @@ function parseConfig(parsed: unknown): ParseResult {
   assertUnique(plugs.map((p) => p.id), "plug id");
   const plugsById = new Map(plugs.map((p) => [p.id, p]));
 
-  const sensors = asArray(root.sensors, "sensors").map((s, i) =>
-    parseSensor(s, `sensors[${i}]`, plugsById, groupIds),
-  );
-  assertUnique(sensors.map((s) => s.label), "sensor label");
-
   const meters = asArray(root.meters, "meters").map((m, i) =>
     parseMeter(m, `meters[${i}]`),
   );
   assertUnique(meters.map((m) => m.id), "meter id");
+  const metersById = new Map(meters.map((m) => [m.id, m]));
+  for (const id of metersById.keys()) {
+    if (plugsById.has(id)) {
+      throw new Error(
+        `${ERR_PREFIX}: id "${id}" is used under both plugs and meters — pick one`,
+      );
+    }
+  }
+
+  const sensors = asArray(root.sensors, "sensors").map((s, i) =>
+    parseSensor(s, `sensors[${i}]`, plugsById, metersById, groupIds),
+  );
+  assertUnique(sensors.map((s) => s.label), "sensor label");
 
   const thermostats = asArray(root.thermostats, "thermostats").map((t, i) =>
     parseThermostat(t, `thermostats[${i}]`, groupIds),

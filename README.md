@@ -143,20 +143,20 @@ Both Plug S Gen3 gateways must have Bluetooth observer enabled and each BLU H&T 
 
 Discovery returns gateway IPs and BLE MACs, so it is off by default. Set `ENABLE_DISCOVERY=1` in `.env`, restart or redeploy, then open `/api/sensors/discover` in a browser where the dashboard is unlocked. Remove the variable again when you're done.
 
-The gateways are listed under `plugs` (with `hidden: true`) and the sensors under `sensors` in `config/smarthome.yml`. Discovery queries every gateway referenced by a sensor. Copy each device `mac` into the matching sensor entry:
+Gateways are Shelly `plugs` entries (`hidden: true`) or `meters` (e.g. Pro 3EM). Sensors live under `sensors` in `config/smarthome.yml`. Discovery queries every gateway referenced by a sensor. Copy each device `mac` into the matching sensor entry:
 
 ```yaml
 sensors:
+  - label: Aussen EG
+    gateway: pro3em      # meters id — Pro 3EM as BTHome gateway
+    mac: ...
+    group: eg
+    home: true
   - label: Aussen DG
     gateway: gw-aussen-arbeit
     mac: ...
     group: dg
-    home: true           # also on home Klima (side-by-side with Aussen EG)
-  - label: Aussen EG
-    gateway: placeholder # replace when the real gateway exists
-    mac: unknown         # demo temp/humidity until real MAC is known
-    group: eg
-    home: true
+    home: true           # also on home Klima
   # Optional group → Heizung floor (read-only); omit home: → Heizung only
   - label: Abstellkammer
     gateway: gw-aussen-arbeit
@@ -379,8 +379,8 @@ sensors:
     group: dg
     home: true           # optional with group → also home Klima
   - label: Aussen EG
-    gateway: placeholder
-    mac: unknown         # demo readings; or a real MAC (aa:bb:…)
+    gateway: pro3em      # meters id also allowed as BTHome gateway
+    mac: aa:bb:cc:dd:ee:ff
     group: eg
     home: true
   - label: Abstellkammer
@@ -388,7 +388,7 @@ sensors:
     mac: aa:bb:cc:dd:ee:ff
     group: dg            # optional → Heizung floor (home: false by default)
 meters:
-  - id: pro3em           # first meter = Hausverbrauch
+  - id: pro3em           # first meter = Hausverbrauch (also usable as gateway)
     ip: 192.168.x.x
     emId: 0
 ```
@@ -399,7 +399,7 @@ meters:
 - Cover `vendor` is `shelly` (default) or `gira`. Gira covers share `GIRA_BLE_API_URL` / `GIRA_BLE_API_TOKEN` with Heizung; `id` must match gira-ble-api `covers[].id`. Do not set `ip` / `coverId` / `password` on Gira covers.
 - Cover `group` is optional. Omit it to show the cover as its own Rollos section (same ↑/↓ as a floor header, no expandable detail list). Standalone cover `id` must not collide with a `groups[].id`.
 - Lamp cycle maps modes to Tuya DPs `20` (on/off) and `22` (brightness 10–1000). On uses `on_percent` (default 100). Dim uses each lamp’s `dim_percent`; if omitted, that lamp turns **off** on dim (useful in mixed groups). A single lamp without `dim_percent` cycles off → on → off.
-- Plug `vendor` is `shelly` (default), `tapo`, or `fsapi`. Sensor `gateway` plugs must be Shelly (Tapo/FSAPI as gateway is a config error).
+- Plug `vendor` is `shelly` (default), `tapo`, or `fsapi`. Sensor `gateway` may be a Shelly plug id or a `meters` id (e.g. Pro 3EM). Tapo/FSAPI as gateway is a config error. Plug and meter ids must not collide.
 - `password` is optional on Shelly covers, plugs and meters. Without it, `SHELLY_RPC_PASSWORD` is used; the server log lists which devices still fall back. Entries sharing an IP must not have different passwords. Do not set `password` on Tapo or FSAPI plugs.
 - FSAPI entries (`vendor: fsapi`) support power on/off. Set `volume_control: true` for volume ±1 (lauter/leiser); default `false`. Optional `pin` (default `1234`) and `port` (default `80`).
 - Empty groups are hidden per tab (no covers → no Rollo section; no lamps → no Lampen section; no live thermostats/sensors → no Heizung floor). Unknown `group` or `gateway` references are config errors.
