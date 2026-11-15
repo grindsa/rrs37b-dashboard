@@ -5,11 +5,31 @@
 import { CACHE_TTL, cacheDelete, cacheGetOrSet } from "./cache";
 import {
   getShellyBindings,
+  isUnknownSensorMac,
   uniqueGatewayIps,
   type SensorBinding,
   type SensorLabel,
 } from "./shelly-config";
 import { ShellyRpcError, shellyRpc } from "./shelly-rpc";
+
+function sensorIdForLabel(label: SensorLabel): string {
+  return label.toLowerCase().replace(/\s+/g, "-");
+}
+
+/** Plausible outdoor demo values while `mac: unknown` (stable per cache fill). */
+function placeholderSensor(binding: SensorBinding): ShellySensor {
+  const temperatureC = Math.round((4 + Math.random() * 16) * 10) / 10;
+  const humidityPct = Math.round(40 + Math.random() * 45);
+  return {
+    id: sensorIdForLabel(binding.label),
+    label: binding.label,
+    temperatureC,
+    humidityPct,
+    batteryPct: 100,
+    updatedAt: new Date().toISOString(),
+    online: true,
+  };
+}
 
 export type ShellySensor = {
   id: string;
@@ -209,6 +229,10 @@ function deviceToSensor(
   device: DiscoveredBthomeDevice | undefined,
   warningSink: string[],
 ): ShellySensor {
+  if (isUnknownSensorMac(binding.mac)) {
+    return placeholderSensor(binding);
+  }
+
   if (!device) {
     if (!binding.mac) {
       warningSink.push(
@@ -220,7 +244,7 @@ function deviceToSensor(
       );
     }
     return {
-      id: binding.label.toLowerCase(),
+      id: sensorIdForLabel(binding.label),
       label: binding.label,
       temperatureC: null,
       humidityPct: null,
@@ -259,7 +283,7 @@ function deviceToSensor(
   const hasReading = temperatureC !== null || humidityPct !== null;
 
   return {
-    id: binding.label.toLowerCase(),
+    id: sensorIdForLabel(binding.label),
     label: binding.label,
     temperatureC,
     humidityPct,

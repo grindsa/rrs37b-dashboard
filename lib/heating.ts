@@ -90,7 +90,7 @@ function toSensorStatus(
   live: ShellySensor | undefined,
 ): HeatingSensorStatus {
   return {
-    id: `blu:${label.toLowerCase()}`,
+    id: `blu:${label.toLowerCase().replace(/\s+/g, "-")}`,
     name: label,
     online: live?.online ?? false,
     temperatureC: live?.temperatureC ?? null,

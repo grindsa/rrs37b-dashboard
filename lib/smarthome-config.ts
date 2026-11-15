@@ -18,12 +18,16 @@ import path from "node:path";
 import { parse as parseYaml } from "yaml";
 
 export const SENSOR_LABELS = [
-  "Aussen",
+  "Aussen DG",
+  "Aussen EG",
   "Arbeitszimmer",
   "Wohnzimmer",
   "Abstellkammer",
 ] as const;
 export type SensorLabel = (typeof SENSOR_LABELS)[number];
+
+/** Sentinel in YAML `mac: unknown` — demo readings, no LAN lookup. */
+export const UNKNOWN_SENSOR_MAC = "unknown";
 
 export const COVER_VENDORS = ["shelly", "gira"] as const;
 export type CoverVendor = (typeof COVER_VENDORS)[number];
@@ -140,7 +144,10 @@ export type SmarthomeSensorConfig = {
   /** Plug id of the BLE gateway that sees this BLU device. */
   gatewayId: string;
   gatewayIp: string;
-  /** BLU MAC (aa:bb:…); optional until paired, then required for reliable mapping. */
+  /**
+   * BLU MAC (aa:bb:…), or {@link UNKNOWN_SENSOR_MAC} for placeholder demo
+   * readings. Optional until paired; real MAC required for reliable mapping.
+   */
   mac?: string;
   /**
    * Optional floor/room group (`group:` in YAML). When set, the sensor is shown
@@ -343,9 +350,13 @@ function asOptionalFsapiPort(
 
 function asOptionalMac(value: unknown, pathLabel: string): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
-  const mac = asString(value, pathLabel).toLowerCase().replace(/-/g, ":");
+  const raw = asString(value, pathLabel).trim().toLowerCase();
+  if (raw === UNKNOWN_SENSOR_MAC) return UNKNOWN_SENSOR_MAC;
+  const mac = raw.replace(/-/g, ":");
   if (!MAC_RE.test(mac)) {
-    throw new Error(`${ERR_PREFIX}: ${pathLabel} must be a MAC (aa:bb:cc:dd:ee:ff)`);
+    throw new Error(
+      `${ERR_PREFIX}: ${pathLabel} must be a MAC (aa:bb:cc:dd:ee:ff) or "${UNKNOWN_SENSOR_MAC}"`,
+    );
   }
   return mac;
 }

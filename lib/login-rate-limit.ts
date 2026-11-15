@@ -25,16 +25,18 @@ function sweep(now: number): void {
   }
 }
 
+const MAX_IP_LENGTH = 64;
+
 /**
- * Client IP as seen by the reverse proxy: X-Real-IP (nginx example), else the
- * last X-Forwarded-For hop, which the proxy itself appended.
+ * Client IP as seen by the reverse proxy: the last X-Forwarded-For hop, which
+ * nginx and Caddy both append themselves. X-Real-IP is only a fallback because
+ * proxies that do not set it (Caddy) pass a client-supplied value through.
  */
 export function clientIp(headers: Headers): string {
-  const realIp = headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
   const forwarded = headers.get("x-forwarded-for");
   const last = forwarded?.split(",").at(-1)?.trim();
-  return last || "unknown";
+  const ip = last || headers.get("x-real-ip")?.trim() || "unknown";
+  return ip.slice(0, MAX_IP_LENGTH);
 }
 
 /** Seconds until the caller may try again, or 0 if allowed. */

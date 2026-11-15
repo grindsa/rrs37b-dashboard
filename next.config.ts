@@ -36,6 +36,11 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   poweredByHeader: false,
+  experimental: {
+    // proxy.ts makes Next buffer every request body (default 10 MB) before
+    // auth runs; the largest JSON body this app accepts is well under 1 KB.
+    proxyClientMaxBodySize: "16kb",
+  },
   // Native/axios KLAP client — keep out of the Turbopack/webpack graph.
   serverExternalPackages: ["tp-link-tapo-connect"],
   // Allow opening the dev server via 127.0.0.1 (not only localhost)

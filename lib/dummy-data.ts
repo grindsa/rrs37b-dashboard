@@ -8,8 +8,17 @@ export const DUMMY_NOW = "2026-11-01T07:18:00+01:00";
 /** Fallback while /api/sensors loads or if the request fails hard. */
 export const DUMMY_SENSORS: ShellySensor[] = [
   {
-    id: "aussen",
-    label: "Aussen",
+    id: "aussen-eg",
+    label: "Aussen EG",
+    temperatureC: 7.1,
+    humidityPct: 74,
+    batteryPct: 100,
+    updatedAt: DUMMY_NOW,
+    online: true,
+  },
+  {
+    id: "aussen-dg",
+    label: "Aussen DG",
     temperatureC: 6.4,
     humidityPct: 78,
     batteryPct: 92,

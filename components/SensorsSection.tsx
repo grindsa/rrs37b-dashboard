@@ -13,6 +13,9 @@ import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 
 const POLL_MS = 45_000;
 
+/** Home Klima outdoor pair — side-by-side; column order follows API/YAML order. */
+const AUSSEN_LABELS = new Set(["Aussen DG", "Aussen EG"]);
+
 type LoadState =
   | { status: "loading"; data?: ShellySensorsResult }
   | { status: "live"; data: ShellySensorsResult }
@@ -21,12 +24,55 @@ type LoadState =
 function SensorRow({
   sensor,
   nowMs,
+  compact = false,
 }: {
   sensor: ShellySensor;
   nowMs: number | null;
+  /** Narrow column layout for the Aussen DG / EG pair. */
+  compact?: boolean;
 }) {
   const age = formatRelativeAge(sensor.updatedAt, nowMs);
   const offline = !sensor.online;
+
+  if (compact) {
+    return (
+      <div
+        className={[
+          "min-w-0 transition-opacity duration-300",
+          offline ? "opacity-55" : undefined,
+        ]
+          .filter(Boolean)
+          .join(" ")}
+      >
+        <p className="text-sm font-medium text-muted">
+          {sensor.label}
+          {offline ? (
+            <span className="ml-2 text-xs font-normal text-warning">
+              {sensor.updatedAt ? "veraltet" : "offline"}
+            </span>
+          ) : null}
+        </p>
+        <p className="mt-0.5 text-[2.35rem] font-semibold leading-none tracking-tight tabular-nums">
+          {formatTemp(sensor.temperatureC)}
+        </p>
+        <div className="mt-2 space-y-0.5 text-sm tabular-nums text-muted">
+          <p>Luftfeuchtigkeit {formatHumidity(sensor.humidityPct)}</p>
+          <p
+            className={
+              sensor.batteryPct !== null && sensor.batteryPct < 20
+                ? "text-warning"
+                : undefined
+            }
+          >
+            Batterie {formatBattery(sensor.batteryPct)}
+          </p>
+        </div>
+        {age ? (
+          <p className="mt-1.5 text-[0.7rem] tabular-nums text-muted">{age}</p>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <li
@@ -69,10 +115,39 @@ function SensorRow({
   );
 }
 
+function splitAussenPair(sensors: ShellySensor[]): {
+  pair: [ShellySensor, ShellySensor] | null;
+  rest: ShellySensor[];
+} {
+  const pairMembers = sensors.filter((s) => AUSSEN_LABELS.has(s.label));
+  if (pairMembers.length === 2) {
+    const pairLabels = new Set(pairMembers.map((s) => s.label));
+    return {
+      pair: [pairMembers[0], pairMembers[1]],
+      rest: sensors.filter((s) => !pairLabels.has(s.label)),
+    };
+  }
+  return { pair: null, rest: sensors };
+}
+
 function PlaceholderRows() {
   return (
     <ul className="mt-5 flex flex-col gap-6" aria-hidden>
-      {["Aussen", "Arbeitszimmer", "Wohnzimmer"].map((label) => (
+      <li className="grid grid-cols-2 gap-x-6 opacity-40">
+        {["Aussen EG", "Aussen DG"].map((label) => (
+          <div key={label} className="min-w-0">
+            <p className="text-sm font-medium text-muted">{label}</p>
+            <p className="mt-0.5 text-[2.35rem] font-semibold leading-none tracking-tight tabular-nums">
+              —
+            </p>
+            <div className="mt-2 space-y-0.5 text-sm text-muted">
+              <p>Luftfeuchtigkeit —</p>
+              <p>Batterie —</p>
+            </div>
+          </div>
+        ))}
+      </li>
+      {["Arbeitszimmer", "Wohnzimmer"].map((label) => (
         <li
           key={label}
           className="grid grid-cols-[1fr_auto] items-end gap-x-4 opacity-40"
@@ -189,6 +264,10 @@ export function SensorsSection({
           ]
         : [];
 
+  const { pair, rest } = sensors?.length
+    ? splitAussenPair(sensors)
+    : { pair: null, rest: [] as ShellySensor[] };
+
   return (
     <section aria-labelledby="sensors-heading">
       <div className="flex items-end justify-between gap-3">
@@ -205,7 +284,19 @@ export function SensorsSection({
       {sensors?.length ? (
         // Fade only the first paint of live values — list remounts once, not on polls.
         <ul className="mt-5 flex flex-col gap-6 animate-fade-in">
-          {sensors.map((sensor) => (
+          {pair ? (
+            <li className="grid grid-cols-2 gap-x-6">
+              {pair.map((sensor) => (
+                <SensorRow
+                  key={sensor.id}
+                  sensor={sensor}
+                  nowMs={nowMs}
+                  compact
+                />
+              ))}
+            </li>
+          ) : null}
+          {rest.map((sensor) => (
             <SensorRow key={sensor.id} sensor={sensor} nowMs={nowMs} />
           ))}
         </ul>

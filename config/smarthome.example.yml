@@ -141,14 +141,25 @@ plugs:
     ip: 192.168.0.11
     switchId: 0
     hidden: true
+  - id: placeholder
+    name: Placeholder Gateway
+    ip: 192.0.2.1
+    switchId: 0
+    hidden: true
 
-# BLU H&T sensors. `label` is one of Aussen, Arbeitszimmer, Wohnzimmer,
-# Abstellkammer; `gateway` must match a plug id. Optional `group: <id>` puts
-# the sensor on that Heizung floor (read-only). Add `home: true` to keep it on
-# home Klima as well (default: Heizung only when grouped).
+# BLU H&T sensors. `label` is one of Aussen DG, Aussen EG, Arbeitszimmer,
+# Wohnzimmer, Abstellkammer; `gateway` must match a plug id. Optional
+# `group: <id>` puts the sensor on that Heizung floor (read-only). Add
+# `home: true` to keep it on home Klima as well (default: Heizung only when
+# grouped). Use `mac: unknown` for demo readings until the real MAC is known.
 # Get `mac` from GET /api/sensors/discover.
 sensors:
-  - label: Aussen
+  - label: Aussen EG
+    gateway: placeholder
+    mac: unknown
+    group: eg
+    home: true
+  - label: Aussen DG
     gateway: gw-aussen-arbeit
     mac: aa:bb:cc:00:11:22
     group: dg

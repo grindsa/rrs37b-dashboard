@@ -147,11 +147,16 @@ The gateways are listed under `plugs` (with `hidden: true`) and the sensors unde
 
 ```yaml
 sensors:
-  - label: Aussen
+  - label: Aussen DG
     gateway: gw-aussen-arbeit
     mac: ...
     group: dg
-    home: true           # also on home Klima
+    home: true           # also on home Klima (side-by-side with Aussen EG)
+  - label: Aussen EG
+    gateway: placeholder # replace when the real gateway exists
+    mac: unknown         # demo temp/humidity until real MAC is known
+    group: eg
+    home: true
   # Optional group → Heizung floor (read-only); omit home: → Heizung only
   - label: Abstellkammer
     gateway: gw-aussen-arbeit
@@ -365,14 +370,19 @@ plugs:
     ip: 192.168.x.x
     hidden: true         # Shelly BLE gateway — not shown, not switchable
 sensors:
-  - label: Wohnzimmer    # Aussen | Arbeitszimmer | Wohnzimmer | Abstellkammer
+  - label: Wohnzimmer    # Aussen DG | Aussen EG | Arbeitszimmer | Wohnzimmer | Abstellkammer
     gateway: gw-wohnzimmer
     mac: aa:bb:cc:dd:ee:ff
-  - label: Aussen
+  - label: Aussen DG
     gateway: gw-aussen-arbeit
     mac: aa:bb:cc:dd:ee:ff
     group: dg
     home: true           # optional with group → also home Klima
+  - label: Aussen EG
+    gateway: placeholder
+    mac: unknown         # demo readings; or a real MAC (aa:bb:…)
+    group: eg
+    home: true
   - label: Abstellkammer
     gateway: gw-aussen-arbeit
     mac: aa:bb:cc:dd:ee:ff
