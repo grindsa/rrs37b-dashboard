@@ -13,7 +13,7 @@ import { SectionMeta, sectionFeedStatus } from "./SectionMeta";
 
 const POLL_MS = 45_000;
 
-/** Home Klima outdoor pair — side-by-side; column order follows API/YAML order. */
+/** Outdoor pair under shared “Aussen”; column order follows API/YAML. */
 const AUSSEN_LABELS = new Set(["Aussen DG", "Aussen EG"]);
 
 type LoadState =
@@ -21,95 +21,119 @@ type LoadState =
   | { status: "live"; data: ShellySensorsResult }
   | { status: "error"; message: string; data?: ShellySensorsResult };
 
+function shortAussenLabel(label: string): string {
+  return label.replace(/^Aussen\s+/i, "") || label;
+}
+
+function AussenPairRow({
+  pair,
+  nowMs,
+}: {
+  pair: [ShellySensor, ShellySensor];
+  nowMs: number | null;
+}) {
+  return (
+    <li className="transition-opacity duration-300">
+      <h3 className="subsection-heading">Aussen</h3>
+      <div className="mt-3 grid grid-cols-2 gap-x-8">
+        {pair.map((sensor) => {
+          const age = formatRelativeAge(sensor.updatedAt, nowMs);
+          const offline = !sensor.online;
+          return (
+            <div
+              key={sensor.id}
+              className={["min-w-0", offline ? "opacity-55" : undefined]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              <p className="text-xs font-medium text-muted">
+                {shortAussenLabel(sensor.label)}
+                {offline ? (
+                  <span className="ml-1.5 font-normal text-warning">
+                    {sensor.updatedAt ? "veraltet" : "offline"}
+                  </span>
+                ) : null}
+              </p>
+              <p className="mt-0.5 text-[2.35rem] font-semibold leading-none tracking-tight tabular-nums">
+                {formatTemp(sensor.temperatureC)}
+              </p>
+              <div className="mt-2 space-y-0.5 text-sm tabular-nums text-muted">
+                <p>Luftfeuchtigkeit {formatHumidity(sensor.humidityPct)}</p>
+                <p
+                  className={[
+                    "text-xs",
+                    sensor.batteryPct !== null && sensor.batteryPct < 20
+                      ? "text-warning"
+                      : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                >
+                  Batterie {formatBattery(sensor.batteryPct)}
+                </p>
+              </div>
+              {age ? (
+                <p className="mt-1.5 text-[0.7rem] tabular-nums text-muted">
+                  {age}
+                </p>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </li>
+  );
+}
+
 function SensorRow({
   sensor,
   nowMs,
-  compact = false,
 }: {
   sensor: ShellySensor;
   nowMs: number | null;
-  /** Narrow column layout for the Aussen DG / EG pair. */
-  compact?: boolean;
 }) {
   const age = formatRelativeAge(sensor.updatedAt, nowMs);
   const offline = !sensor.online;
 
-  if (compact) {
-    return (
-      <div
-        className={[
-          "min-w-0 transition-opacity duration-300",
-          offline ? "opacity-55" : undefined,
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
-        <p className="text-sm font-medium text-muted">
-          {sensor.label}
-          {offline ? (
-            <span className="ml-2 text-xs font-normal text-warning">
-              {sensor.updatedAt ? "veraltet" : "offline"}
-            </span>
-          ) : null}
-        </p>
-        <p className="mt-0.5 text-[2.35rem] font-semibold leading-none tracking-tight tabular-nums">
-          {formatTemp(sensor.temperatureC)}
-        </p>
-        <div className="mt-2 space-y-0.5 text-sm tabular-nums text-muted">
-          <p>Luftfeuchtigkeit {formatHumidity(sensor.humidityPct)}</p>
-          <p
-            className={
-              sensor.batteryPct !== null && sensor.batteryPct < 20
-                ? "text-warning"
-                : undefined
-            }
-          >
-            Batterie {formatBattery(sensor.batteryPct)}
-          </p>
-        </div>
-        {age ? (
-          <p className="mt-1.5 text-[0.7rem] tabular-nums text-muted">{age}</p>
-        ) : null}
-      </div>
-    );
-  }
-
   return (
     <li
       className={[
-        "grid grid-cols-[1fr_auto] items-end gap-x-4 gap-y-1 transition-opacity duration-300",
+        "transition-opacity duration-300",
         offline ? "opacity-55" : undefined,
       ]
         .filter(Boolean)
         .join(" ")}
     >
-      <div>
-        <p className="text-sm font-medium text-muted">
-          {sensor.label}
+      <h3 className="subsection-heading">{sensor.label}</h3>
+      <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-x-4 gap-y-1">
+        <div>
           {offline ? (
-            <span className="ml-2 text-xs font-normal text-warning">
+            <p className="mb-1 text-xs text-warning">
               {sensor.updatedAt ? "veraltet" : "offline"}
-            </span>
+            </p>
           ) : null}
-        </p>
-        <p className="mt-0.5 text-[2.35rem] font-semibold leading-none tracking-tight tabular-nums">
-          {formatTemp(sensor.temperatureC)}
-        </p>
-        {age ? (
-          <p className="mt-1.5 text-[0.7rem] tabular-nums text-muted">{age}</p>
-        ) : null}
-      </div>
-      <div className="pb-1 text-right text-sm tabular-nums text-muted">
-        <p>Luftfeuchtigkeit {formatHumidity(sensor.humidityPct)}</p>
-        <p
-          className={
-            sensor.batteryPct !== null && sensor.batteryPct < 20
-              ? "text-warning"
-              : undefined
-          }
-        >
-          Batterie {formatBattery(sensor.batteryPct)}
-        </p>
+          <p className="text-[2.35rem] font-semibold leading-none tracking-tight tabular-nums">
+            {formatTemp(sensor.temperatureC)}
+          </p>
+          {age ? (
+            <p className="mt-1.5 text-[0.7rem] tabular-nums text-muted">{age}</p>
+          ) : null}
+        </div>
+        <div className="pb-1 text-right text-sm tabular-nums text-muted">
+          <p>Luftfeuchtigkeit {formatHumidity(sensor.humidityPct)}</p>
+          <p
+            className={[
+              "text-xs",
+              sensor.batteryPct !== null && sensor.batteryPct < 20
+                ? "text-warning"
+                : undefined,
+            ]
+              .filter(Boolean)
+              .join(" ")}
+          >
+            Batterie {formatBattery(sensor.batteryPct)}
+          </p>
+        </div>
       </div>
     </li>
   );
@@ -133,34 +157,34 @@ function splitAussenPair(sensors: ShellySensor[]): {
 function PlaceholderRows() {
   return (
     <ul className="mt-5 flex flex-col gap-6" aria-hidden>
-      <li className="grid grid-cols-2 gap-x-6 opacity-40">
-        {["Aussen EG", "Aussen DG"].map((label) => (
-          <div key={label} className="min-w-0">
-            <p className="text-sm font-medium text-muted">{label}</p>
-            <p className="mt-0.5 text-[2.35rem] font-semibold leading-none tracking-tight tabular-nums">
-              —
-            </p>
-            <div className="mt-2 space-y-0.5 text-sm text-muted">
-              <p>Luftfeuchtigkeit —</p>
-              <p>Batterie —</p>
+      <li className="opacity-40">
+        <h3 className="subsection-heading">Aussen</h3>
+        <div className="mt-3 grid grid-cols-2 gap-x-8">
+          {["EG", "DG"].map((short) => (
+            <div key={short} className="min-w-0">
+              <p className="text-xs font-medium text-muted">{short}</p>
+              <p className="mt-0.5 text-[2.35rem] font-semibold leading-none tracking-tight tabular-nums">
+                —
+              </p>
+              <div className="mt-2 space-y-0.5 text-sm text-muted">
+                <p>Luftfeuchtigkeit —</p>
+                <p className="text-xs">Batterie —</p>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </li>
       {["Arbeitszimmer", "Wohnzimmer"].map((label) => (
-        <li
-          key={label}
-          className="grid grid-cols-[1fr_auto] items-end gap-x-4 opacity-40"
-        >
-          <div>
-            <p className="text-sm font-medium text-muted">{label}</p>
-            <p className="mt-0.5 text-[2.35rem] font-semibold leading-none tracking-tight tabular-nums">
+        <li key={label} className="opacity-40">
+          <h3 className="subsection-heading">{label}</h3>
+          <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-x-4">
+            <p className="text-[2.35rem] font-semibold leading-none tracking-tight tabular-nums">
               —
             </p>
-          </div>
-          <div className="pb-1 text-right text-sm text-muted">
-            <p>Luftfeuchtigkeit —</p>
-            <p>Batterie —</p>
+            <div className="pb-1 text-right text-sm text-muted">
+              <p>Luftfeuchtigkeit —</p>
+              <p className="text-xs">Batterie —</p>
+            </div>
           </div>
         </li>
       ))}
@@ -284,18 +308,7 @@ export function SensorsSection({
       {sensors?.length ? (
         // Fade only the first paint of live values — list remounts once, not on polls.
         <ul className="mt-5 flex flex-col gap-6 animate-fade-in">
-          {pair ? (
-            <li className="grid grid-cols-2 gap-x-6">
-              {pair.map((sensor) => (
-                <SensorRow
-                  key={sensor.id}
-                  sensor={sensor}
-                  nowMs={nowMs}
-                  compact
-                />
-              ))}
-            </li>
-          ) : null}
+          {pair ? <AussenPairRow pair={pair} nowMs={nowMs} /> : null}
           {rest.map((sensor) => (
             <SensorRow key={sensor.id} sensor={sensor} nowMs={nowMs} />
           ))}

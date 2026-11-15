@@ -24,11 +24,11 @@ type LoadState =
 export function WeatherPlaceholder() {
   return (
     <section aria-labelledby="weather-heading">
-      <div className="flex items-end justify-between gap-3">
-        <h2 id="weather-heading" className="section-label">
+      <div className="flex items-center gap-3">
+        <h2 id="weather-heading" className="subsection-heading min-w-0 flex-1">
           Wetter
         </h2>
-        <p className="text-xs text-muted">Laden…</p>
+        <p className="shrink-0 text-xs text-muted">Laden…</p>
       </div>
       <div className="mt-5 opacity-40" aria-hidden>
         <div className="flex items-center gap-4">
@@ -118,11 +118,11 @@ export function WeatherSection({
 
   return (
     <section aria-labelledby="weather-heading">
-      <div className="flex items-end justify-between gap-3">
-        <h2 id="weather-heading" className="section-label">
+      <div className="flex items-center gap-3">
+        <h2 id="weather-heading" className="subsection-heading min-w-0 flex-1">
           Wetter
         </h2>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           <SectionMeta
             status={feed}
             fetchedAt={weather?.fetchedAt}
