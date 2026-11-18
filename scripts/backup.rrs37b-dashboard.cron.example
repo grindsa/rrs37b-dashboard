@@ -1,0 +1,14 @@
+# rrs37b-dashboard backup schedule (2nd Friday each month at 08:05)
+# Cron expression explanation:
+#   minute=5 hour=8 day=8-14 month=* weekday=5 (Friday)
+#
+# Required setup:
+# - Configure backup variables in /srv/stacks/rrs37b-dashboard/.env
+#   (for example: REMOTE_TARGET, REMOTE_DIR, SSH_KEY, LOCAL_KEEP, REMOTE_KEEP,
+#    BACKUP_ROOT, TMP_ROOT)
+# - WhatsApp notification uses WA_ADMIN_NUMBER, WA_SRV and WA_PORT from .env
+#   (optional override variables: WA_NOTIFY_NUMBER, WA_NOTIFY_SRV, WA_NOTIFY_PORT)
+# - WA send path uses the same host python venv as proxy (WA_PYTHON_BIN)
+
+# Run backup
+5 8 8-14 * 5 cd /srv/stacks/rrs37b-dashboard && ./scripts/backup.rrs37b-dashboard.sh >> /srv/stacks/rrs37b-dashboard/logs/backup-rrs37b-dashboard-cron.log 2>&1

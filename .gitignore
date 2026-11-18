@@ -25,6 +25,9 @@
 *.pem
 *.swp
 
+# backup / cron logs (created by scripts/backup.rrs37b-dashboard.sh)
+/logs/
+
 # debug
 npm-debug.log*
 yarn-debug.log*
