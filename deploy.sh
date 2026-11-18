@@ -61,7 +61,14 @@ if [[ -z "${RRS37_DEPLOY_UPDATED:-}" ]]; then
   echo "==> Fetching ${BRANCH} in ${ROOT}"
   git fetch origin
   git checkout "$BRANCH"
-  git pull --ff-only origin "$BRANCH"
+  # Deploy checkout must match origin. Local edits to tracked files (e.g. from
+  # a manual tweak) would block `git pull --ff-only`. Secrets stay put because
+  # .env / .env.noah / config/smarthome.yml are gitignored.
+  if ! git diff --quiet || ! git diff --cached --quiet; then
+    echo "Note: discarding local changes to tracked files before reset to origin/${BRANCH}" >&2
+    git status --short || true
+  fi
+  git reset --hard "origin/${BRANCH}"
   # Bash keeps executing the pre-pull copy of this file, so restart on the
   # version that was just checked out.
   export RRS37_DEPLOY_UPDATED=1
