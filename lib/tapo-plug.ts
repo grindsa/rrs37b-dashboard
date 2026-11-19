@@ -1,14 +1,26 @@
 /**
- * Local Tapo plug control (P100 and similar) via KLAP / secure passthrough.
+ * Local Tapo plug control (P100 and similar) via KLAP.
  * Talks to the device LAN IP only — TAPO_EMAIL / TAPO_PASSWORD are used to
  * derive the local session, not for cloud switching.
  */
 
-import { loginDeviceByIp } from "tp-link-tapo-connect";
+// KLAP only — the package's loginDeviceByIp falls back to legacy secure
+// passthrough, which on modern firmware throws "Legacy login not supported"
+// and hides the real KLAP failure (wrong password vs HTTP 403).
+import { loginDeviceByIp as loginKlapDeviceByIp } from "tp-link-tapo-connect/dist/klap-transport";
 
 const TAPO_TIMEOUT_MS = 8_000;
 const SESSION_TTL_MS = 10 * 60_000;
 const MAX_QUEUE_DEPTH = 10;
+
+const CREDENTIALS_HINT =
+  "Tapo-Login fehlgeschlagen — TAPO_EMAIL / TAPO_PASSWORD prüfen " +
+  "(Sonderzeichen in .env in Anführungszeichen setzen)";
+
+const KLAP_FORBIDDEN_HINT =
+  "Tapo KLAP abgelehnt (HTTP 403) — in der Tapo-App " +
+  "Me → Third-Party Services → Third-Party Compatibility einschalten " +
+  "(ggf. aus/an, ~1 Min warten)";
 
 export class TapoPlugError extends Error {
   constructor(
@@ -104,7 +116,7 @@ function getValidCachedSession(host: string): TapoDeviceSession | undefined {
 async function createSession(host: string): Promise<TapoDeviceSession> {
   const { email, password } = getTapoCredentials();
   const device = (await withTimeout(
-    loginDeviceByIp(email, password, host),
+    loginKlapDeviceByIp(email, password, host),
     host,
   )) as TapoDeviceSession;
 
@@ -147,23 +159,26 @@ function toTapoError(host: string, error: unknown): TapoPlugError {
 /** Map library/protocol noise to actionable messages. */
 function humanizeTapoError(raw: string): string {
   const text = raw.toLowerCase();
-  if (
-    text.includes("legacy login not supported") ||
-    text.includes("handshake1 failed") ||
-    text.includes("403") ||
-    text.includes("forbidden")
-  ) {
-    return (
-      "Tapo KLAP abgelehnt (HTTP 403) — in der Tapo-App " +
-      "Me → Third-Party Services → Third-Party Compatibility einschalten " +
-      "(ggf. aus/an, ~1 Min warten)"
-    );
-  }
+  // Credentials before 403: a hash mismatch must not be reported as
+  // Third-Party Compatibility (that was the prod/dev confusion).
   if (
     text.includes("email or password incorrect") ||
+    text.includes("incorrect email or password") ||
     text.includes("invalid credentials")
   ) {
-    return "Tapo-Login fehlgeschlagen — TAPO_EMAIL / TAPO_PASSWORD prüfen";
+    return CREDENTIALS_HINT;
+  }
+  // If a caller still uses the package wrapper, legacy-fallback failure after
+  // a KLAP auth miss usually means bad credentials — not Third-Party mode.
+  if (text.includes("legacy login not supported")) {
+    return CREDENTIALS_HINT;
+  }
+  if (
+    text.includes("handshake1 failed") ||
+    text.includes("status code 403") ||
+    text.includes("forbidden")
+  ) {
+    return KLAP_FORBIDDEN_HINT;
   }
   if (text.includes("tapo_email") || text.includes("tapo_password")) {
     return "TAPO_EMAIL / TAPO_PASSWORD fehlen";
